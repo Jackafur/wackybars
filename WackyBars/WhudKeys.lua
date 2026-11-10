@@ -79,7 +79,7 @@ local function keysByPicture()
 	local out = {}
 	for _, e in ipairs(list) do
 		local p = GetActionTexture(e[1])
-		if p ~= nil and not secret(p) and out[p] == nil and type(e[2]) == "string" and e[2] ~= "" then out[p] = e[2] end
+		if not secret(p) and p ~= nil and out[p] == nil and type(e[2]) == "string" and e[2] ~= "" then out[p] = e[2] end
 	end
 	return out
 end

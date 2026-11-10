@@ -65,15 +65,15 @@ local function secret(v) return issecretvalue and issecretvalue(v) or false end
 -- What an action slot holds, by name: a spell, an item, or a macro's spell or item.
 local function actionName(slot)
 	local ok, kind, id, sub = pcall(GetActionInfo, slot)
-	if not ok or kind == nil or id == nil or secret(kind) or secret(id) then return nil end
+	if not ok or secret(kind) or secret(id) or kind == nil or id == nil then return nil end -- (a hidden value is never compared)
 	if kind == "spell" then return spellName(id) end
 	if kind == "item" then return itemName(id) end
 	if kind == "macro" then
 		if sub == "spell" then return spellName(id) end
 		local s = GetMacroSpell and GetMacroSpell(id)
-		if s and not secret(s) then return spellName(s) end
+		if not secret(s) and s then return spellName(s) end
 		local n = GetMacroItem and GetMacroItem(id)
-		if type(n) == "string" and not secret(n) then return n end
+		if not secret(n) and type(n) == "string" then return n end
 	end
 end
 
@@ -126,10 +126,10 @@ local function lowAlpha()
 			end
 			return UnitHealthPercent("player", true, curve)
 		end)
-		if ok and v ~= nil then return v end
+		if ok then return v end -- (hidden: handed on as it is, never compared)
 	end
 	local ok, hp, max = pcall(function() return UnitHealth("player"), UnitHealthMax("player") end)
-	if ok and type(hp) == "number" and type(max) == "number" and not secret(hp) and not secret(max) and max > 0 then
+	if ok and not secret(hp) and not secret(max) and type(hp) == "number" and type(max) == "number" and max > 0 then
 		return hp / max < BELOW and 1 or 0
 	end
 	return 0
