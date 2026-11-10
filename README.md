@@ -19,8 +19,20 @@ of the screen (keyboard ones left, mouse ones right, each a little down and righ
 onto another; where two overlap, the later one's box is on top.
 
 **The game's eight action bars are hidden** while any WackyBars bar shows (tucked under a hidden frame, not switched
-off, so their keys and stealth / vehicle paging still work). The pet, stance and possess bars stay the game's. All
+off, so their keys and stealth / vehicle paging still work). The stance and possess bars stay the game's. All
 WackyBars bars off, or WackyBars off in the AddOns list: the game's bars are back.
+
+**Look** (`/wbars`, one button): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode tint with it) or Purple to
+pink, one gradient across each bar, `#BD93F9` to `#FF79C6` (the desktop's colours), on the pet buttons in it too, and on the minimap's ring (the game's, BetterBlizzFrames' classic border and day / night ring).
+Back to Default puts BetterBlizzFrames' own colours back at once, no reload. The movement arrows take the look too.
+
+**Arrows** (`/wbars`, one button): how strong the movement arrows are, 20, 30 (default), 50, 70 or 100%. QuietHUD's fade
+multiplies on top.
+
+**Pet keys:** a key bound to a pet bar key in Key Bindings (Alt + F1 to F10 on the Alt mouse bar, say) shows the game's own
+pet button for it: the right abilities for whatever pet is out, autocast and cooldowns as on the game's bar, shown only
+with a pet. The other buttons of that bar stay action buttons. While any pet button sits on a WackyBars bar the game's pet
+bar is hidden; QuietHUD fades that whole bar, its other buttons too, with its Pet bar row (Elements page).
 
 Keys bound to moving (ESDF, WASD, whatever Key Bindings say) show a faint arrow instead of a button. The buttons are
 Bartender4's: LibActionButton-1.0 (with LibStub, CallbackHandler-1.0, LibButtonGlow-1.0, copied from Bartender 4.18.4

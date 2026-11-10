@@ -157,21 +157,25 @@ check("... while the rest of the HUD shows for Alt", MultiBar7.__alpha > 0.5)
 rawset(_G, "IsAltKeyDown", function() return false end)
 QuietHUDDB.barPeek = 511
 run(3)
--- The pet bar's own Shown (Opacity page, Pet bar): it fades with the Action bars, up to its own opacity.
+-- The pet bar has its own Elements row since Nov 10 (late): the bars' mouse over leaves it faded; a fight brings it up to its
+-- own Shown (Opacity page, Pet bar).
 QuietHUDDB.ovPetBar = 0.4
 overQ = true
 run(2)
-check(("bars up: the pet bar at its own 0.40 (%.2f), Action Bar 1 at the bars' (%.2f)"):format(PetActionBar.__alpha,
-	MainActionBar.__alpha), math.abs(PetActionBar.__alpha - 0.4) < 0.01 and MainActionBar.__alpha > 0.5)
+check(("mouse on Q: the action bars up (%.2f), the pet bar stays faded, its own row (%.2f)"):format(MainActionBar.__alpha,
+	PetActionBar.__alpha), MainActionBar.__alpha > 0.5 and PetActionBar.__alpha < 0.05)
 overQ = false
 run(4)
-check("bars down: the pet bar down with them", PetActionBar.__alpha < 0.05)
-QuietHUDDB.ovPetBar = 0
-overQ = true
+rawset(_G, "UnitAffectingCombat", function() return true end)
 run(2)
-check("Pet bar at 0 (Global; Action bars on Global too): the bars' opacity", math.abs(PetActionBar.__alpha - MainActionBar.__alpha) < 0.01)
-overQ = false
-run(4)
+check(("in a fight: the pet bar at its own 0.40 (%.2f), Action Bar 1 at the bars' (%.2f)"):format(PetActionBar.__alpha,
+	MainActionBar.__alpha), math.abs(PetActionBar.__alpha - 0.4) < 0.01 and MainActionBar.__alpha > 0.5)
+QuietHUDDB.ovPetBar = 0
+run(2)
+check("Pet bar at 0 (Global): the Global Shown, as the bars", math.abs(PetActionBar.__alpha - MainActionBar.__alpha) < 0.01)
+rawset(_G, "UnitAffectingCombat", function() return false end)
+run(12)
+check("after the fight: the pet bar down", PetActionBar.__alpha < 0.05)
 -- "Mouse over only bars come up together" (QuietHUD's Action bars page, Nov 10): Bars 4 and 8 Mouse over only; the mouse
 -- on the thumb (Bar 4) brings the items (Bar 8) up too, only with the box ticked.
 QuietHUDDB.barMouse = 8 + 128

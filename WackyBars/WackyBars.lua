@@ -28,6 +28,7 @@ local BUTTON_CONFIG = {
 	hideElements = { macro = false, hotkey = false, equipped = false },
 }
 
+local tint -- (the look, below)
 local DB -- WackyBarsCharDB: keys = { [button id] = key or false }, spare = { [button id] = slot }, pos = { [bar id] = point },
 -- off = { [bar id] = true }, hidden = { [button id] = true }, sizes = { [bar id] = n (nil: 1) }, stagger, mods (labels show
 -- the modifier), noSnap, noEdges, noWheel, told, v
@@ -212,15 +213,20 @@ for si, set in ipairs(SETS) do
 		f:SetMovable(true)
 		f:SetClampedToScreen(true)
 		bar.frame = f
-		-- one holder per game bar (QuietHUD fades each with that bar's row: see sortForQuietHUD); no size, no mouse
+		-- one holder per game bar (QuietHUD fades each with that bar's row: see sortForQuietHUD); no size, no mouse. Holder 9
+		-- holds the game's pet buttons placed on this bar (QuietHUD's Pet bar row; placePets)
 		bar.holders = {}
-		for i = 1, 8 do
+		for i = 1, 9 do
 			local h = CreateFrame("Frame", "WackyBarsHold" .. bar.id .. i, f)
 			h:SetPoint("TOPLEFT", f, "TOPLEFT")
 			h:EnableMouse(false)
 			h.qhudButtons = {}
 			bar.holders[i] = h
 		end
+		-- the game's pet buttons sit in this, inside holder 9: shown only with a pet (placePets)
+		bar.petFrame = CreateFrame("Frame", "WackyBarsPet" .. bar.id, bar.holders[9])
+		bar.petFrame:SetPoint("TOPLEFT", f, "TOPLEFT")
+		bar.petFrame:EnableMouse(false)
 		wbBars[#wbBars + 1] = bar
 		for _, S in ipairs(set.spots) do
 			if not S.only or S.only[L.id] then
@@ -261,12 +267,15 @@ local function spotGone(S)
 	return (DB.noEdges and (S.name == "Edge1" or S.name == "Edge2")) or (DB.noWheel and S.name == "Wheel") or false
 end
 local function active(b)
-	return b.wb.slot ~= nil and barOn(b.wb.bar) and not hiddenButton(b) and not spotGone(b.wb.spot)
+	return (b.wb.slot ~= nil or b.wb.pet ~= nil) and barOn(b.wb.bar) and not hiddenButton(b) and not spotGone(b.wb.spot)
 end
 
--- What a key does in your saved bindings: "mirror" (a game bar button: bar index, button number), "free" or "other".
+-- What a key does in your saved bindings: "mirror" (a game bar button: bar index, button number), "pet" (a pet bar key:
+-- nil, the pet slot), "free" or "other".
 local function parse(cmd)
 	if not cmd or cmd == "" or cmd == "NONE" then return "free" end
+	local pn = tonumber(cmd:match("^BONUSACTIONBUTTON(%d+)$"))
+	if pn and pn >= 1 and pn <= 10 then return "pet", nil, pn end
 	for i, bar in ipairs(BARS) do
 		local n = tonumber(cmd:match("^" .. bar.cmd .. "(%d+)$"))
 		if n and n >= 1 and n <= 12 then return "mirror", i, n end
@@ -325,10 +334,13 @@ local function port()
 		local q = b.wb
 		local cmd = q.def and GetBindingAction(q.def) or ""
 		local kind, gi, n = parse(cmd)
-		q.kind, q.game, q.n, q.cmd, q.other, q.move = kind, gi, n, nil, nil, nil
+		q.kind, q.game, q.n, q.cmd, q.other, q.move, q.pet = kind, gi, n, nil, nil, nil, nil
 		local dir = q.arrowTex and moveDir(q)
 		if dir then
 			q.kind, q.move, q.slot = "move", dir, nil
+		elseif kind == "pet" then
+			-- (a pet key: the game's own pet button for that slot sits here, placePets)
+			q.slot, q.pet, q.cmd = nil, n, cmd
 		elseif kind == "mirror" then
 			q.slot, q.cmd = (BARS[gi].page - 1) * 12 + n, cmd
 			byCmd[cmd] = byCmd[cmd] or {}
@@ -347,7 +359,7 @@ local function port()
 	for _, b in ipairs(buttons) do
 		local q = b.wb
 		-- (a key that moves you never gets its old spare back: it would click the button instead of moving; audit Nov 10)
-		if q.kind ~= "mirror" and q.kind ~= "move" then q.slot = DB.spare[q.id] end
+		if q.kind ~= "mirror" and q.kind ~= "move" and q.kind ~= "pet" then q.slot = DB.spare[q.id] end
 	end
 	local taken = {}
 	for _, s in pairs(DB.spare) do taken[s] = true end
@@ -356,7 +368,7 @@ local function port()
 	for li = 1, #LAYERS do
 		for _, b in ipairs(buttons) do
 			local q = b.wb
-			if q.bar.layerIndex == li and q.kind ~= "mirror" and q.kind ~= "move" and not q.slot and barOn(q.bar)
+			if q.bar.layerIndex == li and q.kind ~= "mirror" and q.kind ~= "move" and q.kind ~= "pet" and not q.slot and barOn(q.bar)
 				and not hiddenButton(b) and not spotGone(q.spot) then
 				while pool[p] and (taken[pool[p]] or HasAction(pool[p])) do p = p + 1 end
 				if pool[p] then
@@ -406,6 +418,52 @@ local function copyTexture(dst, src, setAtlas, fx, fy)
 	if dst.SetDesaturated and src.IsDesaturated then dst:SetDesaturated(src:IsDesaturated()) end
 	if dst.SetVertexColor and src.GetVertexColor then dst:SetVertexColor(src:GetVertexColor()) end
 end
+-- The look (his ask, Nov 10: "follow the theme of my desktop and the focus window bar thats like purple to pink gradient",
+-- "default and the thing i suggested"): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode tint with it, as
+-- before); Purple to pink colours each button's frame and empty slot with a slice of one gradient running across its bar,
+-- #BD93F9 to #FF79C6 (his desktop's, the same as his mouse pointer). Set at each look update, no timer.
+local GRAD_FROM, GRAD_TO = { 0xBD / 255, 0x93 / 255, 0xF9 / 255 }, { 0xFF / 255, 0x79 / 255, 0xC6 / 255 }
+local function mix(t) return GRAD_FROM[1] + (GRAD_TO[1] - GRAD_FROM[1]) * t, GRAD_FROM[2] + (GRAD_TO[2] - GRAD_FROM[2]) * t,
+	GRAD_FROM[3] + (GRAD_TO[3] - GRAD_FROM[3]) * t end
+-- Where a button sits across its bar, 0 (left edge) to 1 (right edge), for its left and right side.
+local function span(b, bar)
+	local bl, bw = b:GetLeft(), b:GetWidth()
+	local fl, fw = bar.frame:GetLeft(), bar.frame:GetWidth()
+	if not (bl and bw and fl and fw) or fw <= 0 then return 0, 1 end
+	local t0, t1 = (bl - fl) / fw, (bl + bw - fl) / fw
+	return math.max(0, math.min(1, t0)), math.max(0, math.min(1, t1))
+end
+local function gradOn(t, bar, b)
+	if type(t) ~= "table" or not (t.SetGradient and CreateColor) then return end
+	local t0, t1 = span(b, bar)
+	local r0, g0, b0 = mix(t0)
+	local r1, g1, b1 = mix(t1)
+	t:SetDesaturated(true) -- (the frame's own grey, so the colour reads true)
+	t:SetGradient("HORIZONTAL", CreateColor(r0, g0, b0, 1), CreateColor(r1, g1, b1, 1))
+end
+-- b: a WackyBars button or a game pet button in a spot (its spot's bar).
+tint = function(b, bar)
+	if not (DB and DB.look == "gradient") then return end
+	bar = bar or (b.wb and b.wb.bar) or (b.wbSpot and b.wbSpot.wb.bar)
+	if not bar then return end
+	gradOn(b:GetNormalTexture(), bar, b)
+	gradOn(b.SlotArt, bar, b)
+end
+-- The frame copied from Action Bar 1 is bigger than the button (51 on 45 with his setup, Nov 10) and sits centred over the
+-- icon there; pinned at one corner, as the library leaves it, it hung 6 pixels off the right and bottom and the icon looked
+-- small and pushed to the top left (his "the spell icons dont fit"). So it goes where Action Bar 1's is: centred, with the
+-- same offset from the middle (none when that can't be read).
+local function placeLike(dst, src, b, ref, fx, fy)
+	if type(dst) ~= "table" or not (dst.ClearAllPoints and dst.SetPoint) then return end
+	local ox, oy = 0, 0
+	if type(src) == "table" and src.GetCenter and ref.GetCenter then
+		local sx, sy = src:GetCenter()
+		local rx, ry = ref:GetCenter()
+		if sx and sy and rx and ry and math.abs(sx - rx) < 10 and math.abs(sy - ry) < 10 then ox, oy = sx - rx, sy - ry end
+	end
+	dst:ClearAllPoints()
+	dst:SetPoint("CENTER", b, "CENTER", ox * fx, oy * fy)
+end
 local function lookOne(b, ref, rw, rh)
 	do
 		local fx = (rw and rw > 0) and (b:GetWidth() / rw) or 1
@@ -420,13 +478,105 @@ local function lookOne(b, ref, rw, rh)
 		end
 		copyTexture(b:GetNormalTexture(), ref:GetNormalTexture(), function(a) b:SetNormalAtlas(a) end, fx, fy)
 		copyTexture(b:GetPushedTexture(), ref:GetPushedTexture(), function(a) b:SetPushedAtlas(a) end, fx, fy)
+		placeLike(b:GetNormalTexture(), ref:GetNormalTexture(), b, ref, fx, fy)
+		placeLike(b:GetPushedTexture(), ref:GetPushedTexture(), b, ref, fx, fy)
+	end
+	tint(b)
+end
+-- The minimap's frame follows the look too (his ask, Nov 10: "any way we can match the look on the mini map to?"): the
+-- ring (MinimapCompassTexture), BetterBlizzFrames' classic border and its day / night ring, #BD93F9 on the left to #FF79C6
+-- on the right. BetterBlizzFrames' Dark Mode writes their colour again now and then: a hook on each (only once Purple to
+-- pink was picked) puts the gradient back on top and keeps what was written, so Default puts exactly that back.
+local mapBusy = false
+local function mapTextures()
+	local out = {}
+	local function add(t) if type(t) == "table" and t.SetGradient and t.GetVertexColor then out[#out + 1] = t end end
+	add(_G.MinimapCompassTexture)
+	local B = _G.BBF
+	if type(B) == "table" then
+		if type(B.classicMinimapTextures) == "table" then
+			for _, t in ipairs(B.classicMinimapTextures) do add(t) end
+		end
+		add(B.dielCycleBorder)
+	end
+	return out
+end
+local function mapOne(t)
+	mapBusy = true
+	if DB and DB.look == "gradient" then
+		t:SetDesaturated(true)
+		t:SetGradient("HORIZONTAL", CreateColor(GRAD_FROM[1], GRAD_FROM[2], GRAD_FROM[3], 1),
+			CreateColor(GRAD_TO[1], GRAD_TO[2], GRAD_TO[3], 1))
+		t.wbGrad = true
+	elseif t.wbGrad then
+		t.wbGrad = nil
+		local o = t.wbOrig
+		t:SetVertexColor(o[1], o[2], o[3])
+		t:SetDesaturated(o[4])
+	end
+	mapBusy = false
+end
+local function mapLook()
+	if not CreateColor then return end
+	for _, t in ipairs(mapTextures()) do
+		if not t.wbOrig and DB and DB.look == "gradient" then
+			local r, g, b = t:GetVertexColor()
+			t.wbOrig = { r or 1, g or 1, b or 1, (t.IsDesaturated and t:IsDesaturated()) and true or false }
+			hooksecurefunc(t, "SetVertexColor", function(self, r2, g2, b2)
+				if mapBusy then return end
+				self.wbOrig[1], self.wbOrig[2], self.wbOrig[3] = r2 or 1, g2 or 1, b2 or 1
+				if DB.look == "gradient" then mapOne(self) end
+			end)
+			hooksecurefunc(t, "SetDesaturated", function(self, v)
+				if mapBusy then return end
+				self.wbOrig[4] = v and true or false
+				if DB.look == "gradient" then mapOne(self) end
+			end)
+		end
+		if t.wbOrig then mapOne(t) end
 	end
 end
 local function matchLook()
+	mapLook()
 	local ref = _G.ActionButton1
 	if not ref then return end
 	local rw, rh = ref:GetWidth(), ref:GetHeight()
 	for _, b in ipairs(buttons) do lookOne(b, ref, rw, rh) end
+	-- the movement arrows (his ask, Nov 10: "gradient the arrows on the movement keys to"): their slice of the bar's
+	-- gradient, still at their faint 0.3; Default puts them back to plain grey
+	for _, bar in ipairs(wbBars) do
+		for _, a in ipairs(bar.arrows) do
+			local t = a.tex
+			-- (their opacity: the Arrows button in the options, 30% unless picked; QuietHUD's fade multiplies on top)
+			t:SetAlpha(DB and DB.arrowAlpha or 0.3)
+			if DB and DB.look == "gradient" then
+				gradOn(t, bar, t)
+				t.wbGrad = true
+			elseif t.wbGrad then
+				t.wbGrad = nil
+				t:SetVertexColor(1, 1, 1)
+				t:SetDesaturated(true)
+			end
+		end
+	end
+	-- the game's pet buttons in WackyBars spots: the gradient, or back to Action Bar 1's tint (the game's look otherwise)
+	for n = 1, 10 do
+		local pb = _G["PetActionButton" .. n]
+		if pb and pb.wbSpot then
+			if DB and DB.look == "gradient" then
+				tint(pb)
+			else
+				for _, k in ipairs({ "GetNormalTexture", "SlotArt" }) do
+					local d = k == "SlotArt" and pb.SlotArt or pb:GetNormalTexture()
+					local s = k == "SlotArt" and ref.SlotArt or ref:GetNormalTexture()
+					if d and s and d.SetVertexColor and s.GetVertexColor then
+						d:SetVertexColor(s:GetVertexColor())
+						if d.SetDesaturated and s.IsDesaturated then d:SetDesaturated(s:IsDesaturated()) end
+					end
+				end
+			end
+		end
+	end
 end
 local lookQueued = false
 local function queueLook()
@@ -589,7 +739,8 @@ end
 
 -- The game's eight action bars are tucked away while any WackyBars bar shows (his ask, Nov 10: "flat out disable the
 -- vanilla bars when wacky bars is on"). Tucked, not switched off: their keys keep working (the game presses a bar's buttons
--- without checking that they show), which keeps stealth and vehicle paging. The pet, stance and possess bars stay the game's.
+-- without checking that they show), which keeps stealth and vehicle paging. The stance and possess bars stay the game's; the
+-- pet bar is tucked only while its buttons sit in WackyBars spots (placePets).
 -- Every WackyBars bar off, or WackyBars switched off in the AddOns list: they are all back.
 local tucked = {}
 local function gameBars()
@@ -634,8 +785,13 @@ local function sortForQuietHUD()
 		else
 			main = bar.follow or main
 		end
+		-- A bar with pet keys is your pet bar: all of it goes with QuietHUD's Pet bar row, its other buttons too (his ask, Nov 10:
+		-- "just attach it to the fade in the petbar stuff")
+		for _, b in ipairs(bar.buttons) do
+			if b.wb.kind == "pet" and active(b) and not hiddenButton(b) then main = 9 break end
+		end
 		bar.main = main
-		for i = 1, 8 do wipe(bar.holders[i].qhudButtons) end
+		for i = 1, 9 do wipe(bar.holders[i].qhudButtons) end -- (the pet buttons join holder 9's in placePets)
 		local h = bar.holders[main]
 		for _, b in ipairs(bar.buttons) do
 			if b:GetParent() ~= h then b:SetParent(h) end
@@ -644,6 +800,81 @@ local function sortForQuietHUD()
 		-- (the arrows fade with the bar, but show at full while you edit or move, like the buttons: showFull)
 		bar.arrowHome = bar.holders[main]
 		for _, a in ipairs(bar.arrows) do a.tex:SetParent((editing or moving) and bar.frame or bar.arrowHome) end
+	end
+end
+
+-- The pet bar (his ask, Nov 10: "make the wackybar petbar function like an actual petbar", with the extra buttons kept): a
+-- spot whose key is a pet key in Key Bindings (Pet bar, BONUSACTIONBUTTON1 to 10) shows the game's own pet button for that
+-- slot, so it changes with the pet you summon, autocast, cooldowns and all, exactly as on the game's pet bar. The other
+-- spots of that bar stay action buttons. Dominos' way: the game's button is moved into the spot (out of a fight only) and
+-- sized to it; WackyBars' own button there stays hidden and only marks the place. The buttons sit in the bar's petFrame,
+-- which shows only while you have a pet (a state driver, so a fight can't stop it), inside holder 9, which QuietHUD fades
+-- with its Pet bar row (the whole bar is in holder 9 then: sortForQuietHUD). The game's pet bar is tucked away while any of its buttons is in a spot, and every button goes back when none is.
+-- Known gap: the tucked bar no longer turns a pet key's text red out of range.
+local petMoved, petTucked = {}, nil
+local function petHotkey(pb)
+	if not pb.wbHooked and pb.SetHotkeys then
+		pb.wbHooked = true
+		-- (the game writes the key text again on every binding change: WackyBars' label goes back on)
+		hooksecurefunc(pb, "SetHotkeys", function(self) if self.wbSpot then petHotkey(self) end end)
+	end
+	local b, hk = pb.wbSpot, pb.HotKey
+	if not (b and hk) then return end
+	local t = hotkeyText(b)
+	if t and t ~= "" then
+		hk:SetText(t)
+		hk:Show()
+	else
+		hk:Hide()
+	end
+end
+local function placePets()
+	local want = {}
+	for _, b in ipairs(buttons) do
+		local q = b.wb
+		if q.kind == "pet" and active(b) and not hiddenButton(b) and not want[q.pet] then want[q.pet] = b end
+	end
+	for _, bar in ipairs(wbBars) do
+		if not bar.petFrame.wbDriven then
+			bar.petFrame.wbDriven = true
+			RegisterStateDriver(bar.petFrame, "visibility", "[@pet,exists] show; hide")
+		end
+	end
+	local any = false
+	for n = 1, 10 do
+		local pb, b = _G["PetActionButton" .. n], want[n]
+		if pb and b then
+			any = true
+			local h, pf = b.wb.bar.holders[9], b.wb.bar.petFrame
+			if pb:GetParent() ~= pf then pb:SetParent(pf) end
+			pb.wbBase = pb.wbBase or pb:GetHeight()
+			local bh = b:GetHeight()
+			pb:SetScale((bh and bh > 0 and pb.wbBase and pb.wbBase > 0) and bh / pb.wbBase or 1)
+			pb:ClearAllPoints()
+			pb:SetPoint("CENTER", b, "CENTER", 0, 0)
+			pb.wbSpot = b
+			h.qhudButtons[#h.qhudButtons + 1] = pb
+			petHotkey(pb)
+			tint(pb)
+			petMoved[n] = true
+		elseif pb and petMoved[n] then
+			petMoved[n], pb.wbSpot = nil, nil
+			pb:SetParent(pb.container or _G.PetActionBar or UIParent)
+			pb:SetScale(1)
+			pb:ClearAllPoints()
+			pb:SetPoint("CENTER")
+			if pb.SetHotkeys then pb:SetHotkeys() end
+		end
+	end
+	local bar = _G.PetActionBar
+	if bar then
+		if any and not petTucked then
+			petTucked = bar:GetParent()
+			bar:SetParent(hider)
+		elseif not any and petTucked then
+			bar:SetParent(petTucked)
+			petTucked = nil
+		end
 	end
 end
 
@@ -721,12 +952,12 @@ local function apply()
 	local map = {}
 	for _, b in ipairs(buttons) do
 		local q = b.wb
-		if active(b) and q.kind == "mirror" and effKey(b) ~= q.def then map[q.def] = "none" end
+		if active(b) and (q.kind == "mirror" or q.kind == "pet") and effKey(b) ~= q.def then map[q.def] = "none" end
 	end
 	for _, b in ipairs(buttons) do
 		local q, k = b.wb, effKey(b)
 		if k then
-			if q.kind == "mirror" then
+			if q.kind == "mirror" or q.kind == "pet" then
 				if k ~= q.def then map[k] = { cmd = q.cmd } end
 			else
 				map[k] = { click = b:GetName() }
@@ -753,6 +984,7 @@ local function apply()
 	sortForQuietHUD()
 	if QuietHUD_RefreshBarClicks then QuietHUD_RefreshBarClicks() end -- (QuietHUD's Click through column, per game bar)
 	layout()
+	placePets()
 	gameBars()
 	matchLook()
 	applying = false
@@ -761,11 +993,12 @@ local function apply()
 end
 
 local function summary()
-	local mirror, spare, none, other, moves = 0, 0, 0, {}, 0
+	local mirror, spare, none, other, moves, pets = 0, 0, 0, {}, 0, 0
 	for _, b in ipairs(buttons) do
 		local q = b.wb
 		if barOn(q.bar) then
 			if q.kind == "move" then moves = moves + 1
+			elseif q.kind == "pet" then pets = pets + 1
 			elseif q.kind == "mirror" then mirror = mirror + 1
 			elseif q.slot then spare = spare + 1
 			elseif not hiddenButton(b) and not spotGone(q.spot) then none = none + 1 end
@@ -776,6 +1009,7 @@ local function summary()
 		none > 0 and (", " .. none .. " free keys have no slot (out of spare slots: switch off a bar you don't use)") or ""))
 	if #other > 0 then say("Left alone (they do something else): " .. table.concat(other, ", ")) end
 	if moves > 0 then say(moves .. " keys move you, so they show an arrow (they follow your Key Bindings).") end
+	if pets > 0 then say(pets .. " keys are pet keys, so they show your pet's buttons (the game's pet bar is hidden).") end
 	say(next(tucked) and "The game's action bars are hidden while WackyBars shows (their keys still work)."
 		or "The game's action bars show: every WackyBars bar is off.")
 end
@@ -1367,7 +1601,7 @@ local function toggleOptions()
 		local framed = ok and w and w.SetTitle and type(w.Inset) == "table"
 		if ok and w and not framed then w:Hide() end
 		options = framed and w or CreateFrame("Frame", "WackyBarsOptions", UIParent)
-		options:SetSize(400, 84 + 4 * 26 + 56 + 26 + 30 + 144 + 50)
+		options:SetSize(400, 84 + 4 * 26 + 56 + 26 + 30 + 30 + 30 + 144 + 50)
 		options:SetPoint("CENTER")
 		options:SetFrameStrata("DIALOG")
 		options:SetClampedToScreen(true)
@@ -1469,6 +1703,30 @@ local function toggleOptions()
 			apply()
 		end)
 		controls[#controls + 1] = function() moveCycle:SetText(DB.moveKeys or "From Key Bindings") end
+		below = below - 30
+		-- Look: Default (your Action Bar 1's, BetterBlizzFrames' dark with it) or Purple to pink (the look block above)
+		text(24, below - 86, "Look", "GameFontHighlight")
+		local lookCycle = button(150, below - 80, 160, "", function()
+			DB.look = (DB.look ~= "gradient") and "gradient" or nil
+			matchLook()
+		end)
+		controls[#controls + 1] = function() lookCycle:SetText(DB.look == "gradient" and "Purple to pink" or "Default") end
+		below = below - 30
+		-- Arrows: how strong the movement arrows are (his ask, Nov 10: "make that an option we can change"); one button cycles
+		-- the steps, 30% the default. QuietHUD's fade multiplies on top (30% at his 0.6 Shown is 18% on screen).
+		text(24, below - 86, "Arrows", "GameFontHighlight")
+		local ARROW_STEPS = { 0.2, 0.3, 0.5, 0.7, 1 }
+		local arrowCycle = button(150, below - 80, 160, "", function()
+			local at = 2
+			for i, v in ipairs(ARROW_STEPS) do if math.abs((DB.arrowAlpha or 0.3) - v) < 0.01 then at = i end end
+			local v = ARROW_STEPS[at % #ARROW_STEPS + 1]
+			DB.arrowAlpha = (v ~= 0.3) and v or nil
+			matchLook()
+			if refreshOptions then refreshOptions() end
+		end)
+		controls[#controls + 1] = function()
+			arrowCycle:SetText(("%d%%"):format(math.floor((DB.arrowAlpha or 0.3) * 100 + 0.5)))
+		end
 		below = below - 30
 		text(24, below - 88, "Size: Move bars, click a bar (each bar its own, like Edit Mode)", "GameFontHighlightSmall")
 		button(20, below - 110, 170, "Move bars", function() options:Hide() startMove() end)

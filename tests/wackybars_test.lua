@@ -144,7 +144,7 @@ for _, n in ipairs({ "MainActionBar", "MultiBarBottomLeft", "MultiBarBottomRight
 	if _G[n]:GetParent() == UIParent then allTucked = false end
 end
 check("all eight game bars tucked away (also ones holding more than shows here)", allTucked)
-check("the pet bar stays the game's", _G.PetActionBar == nil or _G.PetActionBar:GetParent() == UIParent)
+check("no pet keys: the pet bar stays the game's", _G.PetActionBar == nil or _G.PetActionBar:GetParent() == UIParent)
 
 -- Hypershift: your items, Numpad on the side buttons, its own bar straight off the screen (QuietHUD fades it with Bar 8).
 check("Hypershift side 1 (Numpad 1) shows slot 178 (Bar 8 button 10), labelled 1", attr("WackyBarsMouseHyperSide1", "action") == 178
@@ -535,6 +535,125 @@ check("Movement keys set to ESDF in the options: E S D F show arrows whatever th
 DB.moveKeys = nil
 SlashCmdList.WACKYBARS("status")
 check("WASD: E and F are buttons again, with spare slots", _G.WackyBarsPlainE.__shown and DB.spare.PlainE ~= nil and not arrowShown("WackyBarsPlainE"))
+
+-- The pet bar: Alt + side 1 and 2 are pet keys in Key Bindings (his Naga, Nov 10). Those two spots on the Alt mouse bar show
+-- the game's own pet buttons (they change with the pet), the rest of the bar stays action buttons, the game's pet bar is
+-- tucked away; unbound again, everything goes back.
+rawset(_G, "hooksecurefunc", function(t, name, fn)
+	if type(t) ~= "table" then return end
+	local old = t[name]
+	rawset(t, name, function(...) if old then old(...) end fn(...) end)
+end)
+local petBar = M.newObj("Frame", "PetActionBar")
+for n = 1, 10 do
+	local c = M.newObj("Frame", "PetActionBarButtonContainer" .. n, petBar)
+	local pb = M.newObj("CheckButton", "PetActionButton" .. n, c)
+	pb.__h = 30
+	rawset(pb, "container", c)
+	local hk = M.newObj("FontString", nil, pb)
+	rawset(hk, "SetText", function(s, t) s.__text = t end)
+	rawset(pb, "HotKey", hk)
+	rawset(pb, "SetHotkeys", function(s) s.HotKey:SetText("game") end)
+end
+binds["ALT-F1"], binds["ALT-F2"] = "BONUSACTIONBUTTON1", "BONUSACTIONBUTTON2"
+M.fire("UPDATE_BINDINGS")
+local pet1, petSpot = _G.PetActionButton1, _G.WackyBarsMouseAltSide1
+check("Alt + side 1 is a pet key: the game's pet button 1 sits in its spot", pet1:GetParent() == _G.WackyBarsPetMouseAlt
+	and pet1.__points[#pet1.__points][2] == petSpot and _G.PetActionButton2:GetParent() == _G.WackyBarsPetMouseAlt
+	and _G.WackyBarsPetMouseAlt:GetParent() == _G.WackyBarsHoldMouseAlt9)
+check("... sized to the spot, labelled like it, WackyBars' own button hidden, no spare slot", math.abs(pet1.__scale * 30
+	- petSpot:GetHeight()) < 0.01 and pet1.HotKey.__text == "1" and not petSpot.__shown and petSpot.wb.slot == nil)
+pet1:SetHotkeys()
+check("... the game's key text is replaced again after a binding change", pet1.HotKey.__text == "1")
+check("... no override: the key stays the game's pet key", overrides["ALT-F1"] == nil)
+check("... they show only with a pet", drivers[_G.WackyBarsPetMouseAlt]
+	and drivers[_G.WackyBarsPetMouseAlt].visibility == "[@pet,exists] show; hide" and not drivers[_G.WackyBarsHoldMouseAlt9])
+local inHolder9 = {}
+for _, b in ipairs(_G.WackyBarsHoldMouseAlt9.qhudButtons) do inHolder9[b] = true end
+check("... the whole Alt mouse bar goes with QuietHUD's Pet bar row (holder 9): the pet buttons and the extra buttons",
+	inHolder9[pet1] and inHolder9[_G.WackyBarsMouseAltEdge1] and _G.WackyBarsMouseAltEdge1:GetParent() == _G.WackyBarsHoldMouseAlt9
+	and #_G.WackyBarsHoldMouseAlt5.qhudButtons == 0)
+check("... the plain mouse bar still goes with its own row", _G.WackyBarsMousePlainSide1:GetParent() ~= _G.WackyBarsHoldMousePlain9)
+check("pet slot 3 has no key here: stays in the game's bar", _G.PetActionButton3:GetParent() == _G.PetActionBarButtonContainer3)
+check("the other Alt mouse spots stay action buttons", _G.WackyBarsMouseAltSide11.wb.kind ~= "pet" and _G.WackyBarsMouseAltEdge1.wb.kind ~= "pet")
+check("the game's pet bar is tucked away", petBar:GetParent() ~= UIParent)
+binds["ALT-F1"], binds["ALT-F2"] = nil, nil
+M.fire("UPDATE_BINDINGS")
+check("pet keys unbound: the pet buttons and the game's pet bar are back", pet1:GetParent() == _G.PetActionBarButtonContainer1
+	and pet1.__scale == 1 and pet1.HotKey.__text == "game" and petBar:GetParent() == UIParent)
+check("... and the Alt mouse bar follows the mouse bar's row again", _G.WackyBarsMouseAltEdge1:GetParent() ~= _G.WackyBarsHoldMouseAlt9
+	and #_G.WackyBarsHoldMouseAlt9.qhudButtons == 0)
+
+-- The look (Nov 10): Default copies Action Bar 1's tint (BetterBlizzFrames' dark); Purple to pink sets a gradient slice.
+rawset(_G, "CreateColor", function(r, g, b, a) return { r = r, g = g, b = b, a = a } end)
+local function tex()
+	local t = M.newObj("Texture")
+	rawset(t, "SetGradient", function(s, o, c0, c1) s.__grad = { o, c0, c1 } end)
+	rawset(t, "SetVertexColor", function(s, r, g, b) s.__vc = { r, g, b }; s.__grad = nil end)
+	rawset(t, "GetVertexColor", function(s) local v = s.__vc or { 1, 1, 1 }; return v[1], v[2], v[3] end)
+	rawset(t, "SetDesaturated", function(s, v) s.__desat = v end)
+	rawset(t, "IsDesaturated", function(s) return s.__desat end)
+	return t
+end
+local ab1 = M.newObj("CheckButton", "ActionButton1")
+local refTex, qTex = tex(), tex()
+refTex:SetVertexColor(0.2, 0.2, 0.2)
+rawset(ab1, "GetNormalTexture", function() return refTex end)
+for _, k in ipairs({ "SlotArt", "SlotBackground" }) do rawset(ab1, k, false) end
+rawset(ab1, "GetPushedTexture", function() return nil end)
+-- (the fake buttons have no textures: every WackyBars button gets none, Q gets one below)
+for _, v in pairs(_G) do
+	if type(v) == "table" and rawget(v, "wb") then
+		rawset(v, "GetNormalTexture", function() return nil end)
+		rawset(v, "GetPushedTexture", function() return nil end)
+		rawset(v, "SlotArt", false)
+	end
+end
+rawset(_G.WackyBarsPlainQ, "GetNormalTexture", function() return qTex end)
+-- the minimap ring, darkened by BetterBlizzFrames
+local ring = tex()
+ring:SetVertexColor(0.2, 0.2, 0.2)
+rawset(_G, "MinimapCompassTexture", ring)
+check("Default: the minimap ring is left alone", ring.__grad == nil and ring.__vc[1] == 0.2)
+local arrowT = _G.WackyBarsPlainS.wb.arrowTex
+rawset(arrowT, "SetGradient", function(s2, o, c0, c1) s2.__grad = { o, c0, c1 } end)
+rawset(arrowT, "SetVertexColor", function(s2, r) s2.__vc = r; s2.__grad = nil end)
+DB.look = "gradient"
+SlashCmdList.WACKYBARS("status")
+check("Purple to pink: the movement arrows get their slice of the gradient", arrowT.__grad ~= nil and arrowT.__grad[1] == "HORIZONTAL")
+check("Purple to pink: the minimap ring gets the whole gradient", ring.__grad and math.abs(ring.__grad[2].r - 0xBD / 255) < 0.01
+	and math.abs(ring.__grad[3].b - 0xC6 / 255) < 0.01)
+ring:SetVertexColor(0.3, 0.3, 0.3) -- (BetterBlizzFrames writes its dark again)
+check("... BetterBlizzFrames writing its dark again: the gradient goes back on top", ring.__grad ~= nil)
+local g = qTex.__grad
+check("Purple to pink: Q's frame gets its slice of the bar's gradient (#BD93F9 at the bar's left, partway to #FF79C6)", g
+	and g[1] == "HORIZONTAL" and g[2].r >= 0xBD / 255 - 0.01 and g[3].b < 0xF9 / 255 and g[3].b > 0xC6 / 255 and qTex.__desat == true)
+DB.look = nil
+SlashCmdList.WACKYBARS("status")
+check("Default: Q copies Action Bar 1's dark tint again", qTex.__grad == nil and qTex.__vc and qTex.__vc[1] == 0.2)
+local qp = qTex.__points[#qTex.__points]
+check("Q's frame sits centred on the button, as Action Bar 1's (not pinned at a corner: the icons looked small)", qp
+	and qp[1] == "CENTER" and qp[2] == _G.WackyBarsPlainQ and qp[3] == "CENTER")
+check("Default: the minimap ring has BetterBlizzFrames' latest dark back", ring.__grad == nil and ring.__vc[1] == 0.3)
+check("Default: the arrows plain grey again", arrowT.__grad == nil and arrowT.__vc == 1)
+check("arrows at 30% by default", math.abs(arrowT.__alpha - 0.3) < 0.01)
+DB.arrowAlpha = 0.5
+SlashCmdList.WACKYBARS("status")
+check("Arrows set to 50% in the options: the arrows at 50%", math.abs(arrowT.__alpha - 0.5) < 0.01)
+DB.arrowAlpha = nil
+SlashCmdList.WACKYBARS("status")
+do -- the Arrows button in /wbars: one click, 30% to 50%
+	local btn
+	SlashCmdList.WACKYBARS("")
+	for _, f in ipairs(M.frames) do
+		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "30%" then btn = f end
+	end
+	if btn and btn.__scripts.OnClick then btn.__scripts.OnClick(btn) end
+	check("the Arrows button in /wbars steps 30% to 50% and says so", btn and DB.arrowAlpha == 0.5 and btn.__text == "50%"
+		and math.abs(arrowT.__alpha - 0.5) < 0.01)
+	DB.arrowAlpha = nil
+	SlashCmdList.WACKYBARS("status")
+end
 
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
