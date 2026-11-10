@@ -1,0 +1,5 @@
+<Bindings>
+	<Binding name="WACKYBARS_OPTIONS" header="WACKYBARS">WackyBars_ToggleOptions()</Binding>
+	<Binding name="WACKYBARS_MOVE">WackyBars_ToggleMove()</Binding>
+	<Binding name="WACKYBARS_EDIT">WackyBars_ToggleEdit()</Binding>
+</Bindings>
