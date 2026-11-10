@@ -1133,6 +1133,424 @@ do -- 4: drifting colours. Off by default; a box in the Look list; a timer only 
 	rawset(_G, "MenuUtil", nil)
 end
 
+-- The feature files of the ideas he picked on Nov 10 night (Ding.lua, ...): their fakes. The fake game's animations,
+-- texture atlases and blend modes keep what they are given here, so the checks can read them; put back at the end.
+local objMt = getmetatable(UIParent)
+local baseIndex = objMt.__index
+do
+	local REC = { SetAtlas = "__atlas", SetBlendMode = "__blend", SetStartDelay = "__delay", SetFromAlpha = "__from",
+		SetToAlpha = "__to", SetDuration = "__dur", SetLooping = "__loop", SetSmoothing = "__smooth", SetOrder = "__order",
+		SetDesaturated = "__desat" }
+	objMt.__index = function(self, key)
+		if REC[key] then return function(s, v) rawset(s, REC[key], v) return s end end
+		if key == "CreateAnimation" then
+			return function(s, kind)
+				local a = M.newObj("Animation", nil, s)
+				rawset(a, "__animKind", kind)
+				local list = rawget(s, "__anims") or {}
+				list[#list + 1] = a
+				rawset(s, "__anims", list)
+				return a
+			end
+		end
+		if key == "Play" then
+			return function(s) rawset(s, "__playing", true) rawset(s, "__plays", (rawget(s, "__plays") or 0) + 1) return s end
+		end
+		if key == "Stop" then return function(s) rawset(s, "__playing", false) return s end end
+		if key == "IsPlaying" then return function(s) return rawget(s, "__playing") or false end end
+		if key == "SetGradient" then return function(s, o, c0, c1) rawset(s, "__grad", { o, c0, c1 }) return s end end
+		return baseIndex(self, key)
+	end
+end
+local function groupOf(t)
+	for _, o in ipairs(M.frames) do
+		if o.__kind == "CreateAnimationGroup" and o.__parent == t then return o end
+	end
+end
+
+-- Ding wave (Ding.lua, his "this was a nice one"): a level up plays one purple to pink glow across every spot that shows,
+-- left to right, with the game's animations; /wbars ding plays it to look at.
+do
+	local function dingGlow(b)
+		local layer = _G["WackyBarsDing" .. b.wb.bar.id]
+		for _, o in ipairs(M.frames) do
+			if layer and o.__kind == "CreateTexture" and o.__parent == layer then
+				local p = o.__points[#o.__points]
+				if p and p[2] == b then return o end
+			end
+		end
+	end
+	local all = {}
+	for _, v in pairs(_G) do
+		if type(v) == "table" and rawget(v, "wb") and v.wb.bar then all[#all + 1] = v end
+	end
+	local function spotShows(b)
+		local a = b.wb.arrowTex
+		return b.wb.bar.frame.__shown and (b.__shown or (a and a.__shown)) and true or false
+	end
+	local timers = #M.timers
+	rawset(_G.WackyBarsPlainQ, "GetCenter", function() return 100, 50 end)
+	rawset(_G.WackyBarsPlainY, "GetCenter", function() return 400, 50 end)
+	SlashCmdList.WACKYBARS("ding")
+	local want, lit, wrong, arrows = 0, 0, 0, 0
+	for _, b in ipairs(all) do
+		local g = dingGlow(b)
+		if spotShows(b) then
+			want = want + 1
+			if g and g.__shown then lit = lit + 1 end
+			if g and g.__shown and not b.__shown then arrows = arrows + 1 end
+		elseif g and g.__shown then
+			wrong = wrong + 1
+		end
+	end
+	check(("Ding: /wbars ding lights every spot that shows (%d of %d), movement arrows too, nothing else"):format(lit, want),
+		want > 0 and lit == want and wrong == 0 and arrows > 0)
+	local q, yb = dingGlow(_G.WackyBarsPlainQ), dingGlow(_G.WackyBarsPlainY)
+	local gq, gy = q and groupOf(q), yb and groupOf(yb)
+	local riseQ, riseY = gq and gq.__anims and gq.__anims[1], gy and gy.__anims and gy.__anims[1]
+	check("... left to right: the leftmost at once, Q next, Y (rightmost) 1.4 seconds after the first",
+		riseQ and riseY and math.abs(riseQ.__delay - 0.35) < 0.001 and math.abs(riseY.__delay - 1.4) < 0.001
+		and groupOf(dingGlow(_G.WackyBarsPlain1)).__anims[1].__delay == 0)
+	check("... once: fade in 0.25 s to half strength, out in 0.35 s, played by the game (no loop)", gq and gq.__plays == 1
+		and gq.__loop == nil and riseQ.__from == 0 and riseQ.__to == 0.5 and riseQ.__dur == 0.25 and gq.__anims[2].__to == 0
+		and gq.__anims[2].__dur == 0.35)
+	check("... the game's spell highlight, added light, tinted with the button's slice of the bar's gradient",
+		q and q.__atlas == "UI-HUD-ActionBar-IconFrame-Mouseover" and q.__blend == "ADD" and q.__grad
+		and q.__grad[1] == "HORIZONTAL" and q.__desat == true)
+	local layer = _G.WackyBarsDingPlain
+	check("... on the bar itself, not in QuietHUD's faded holders, at full whatever they fade", layer
+		and layer.__parent == _G.WackyBarsPlain and layer.__ignoreParentAlpha == true)
+	local onUpdate = false
+	for _, o in ipairs(M.frames) do
+		if o.__name and o.__name:match("^WackyBarsDing") and o.__scripts.OnUpdate then onUpdate = true end
+	end
+	check("... no OnUpdate and no timer: the game's animations only", not onUpdate and #M.timers == timers)
+	gq.__scripts.OnFinished(gq)
+	check("... when it is done the glow is hidden again", q.__shown == false)
+	DB.off.Shift = true
+	SlashCmdList.WACKYBARS("status")
+	local shiftQ = dingGlow(_G.WackyBarsShiftQ)
+	if shiftQ then shiftQ:Hide() end
+	M.fire("PLAYER_LEVEL_UP", 61, 10, 10, 0, 0, 1, 1, 1, 1, 1)
+	check("a level up (PLAYER_LEVEL_UP) plays it again; a bar switched off stays dark", gq.__plays == 2 and q.__shown == true
+		and not (shiftQ and shiftQ.__shown))
+	DB.off.Shift = nil
+	SlashCmdList.WACKYBARS("status")
+end
+
+-- Bar profiles (Profiles.lua, his "this could be nice to"): one Profiles row in /wbars; a profile keeps which bars show,
+-- their places and their sizes; one click on the name switches; changes go into the profile you are on.
+do
+	local popups = {}
+	rawset(_G, "StaticPopupDialogs", {})
+	rawset(_G, "StaticPopup_Show", function(which) popups[#popups + 1] = which end)
+	local function dialogSays(text) return { GetEditBox = function() return { GetText = function() return text end } end } end
+	local opts = _G.WackyBarsOptions
+	rawset(opts, "GetRegions", function(s) -- (the window's labels; the fake game lists none)
+		local out = {}
+		for _, o in ipairs(M.frames) do if o.__parent == s and o.__kind == "CreateFontString" then out[#out + 1] = o end end
+		return unpack(out)
+	end)
+	if opts.__shown then SlashCmdList.WACKYBARS("") end
+	SlashCmdList.WACKYBARS("") -- (the window opens: the row is made)
+	local pick, save, label = _G.WackyBarsProfilePick, _G.WackyBarsProfileSave, nil
+	for _, o in ipairs(M.frames) do if o.__parent == opts and o.__text == "Profiles" then label = o end end
+	local box = label and label.__points[1] and label.__points[1][2]
+	check("Profiles: one row in /wbars, the label, a name button (None yet) and Save where the other rows have buttons",
+		pick and save and pick.__text == "None" and save.__text == "Save" and pick.__w == 160 and box
+		and box.__shown == false and label.__points[1][1] == "LEFT" and pick.__points[1][2] == box and pick.__points[1][4] == 130)
+	pick.__scripts.OnClick(pick)
+	check("... no profile yet: a click on the name asks for one", popups[#popups] == "WACKYBARS_PROFILE")
+	local P = StaticPopupDialogs.WACKYBARS_PROFILE
+	local keys0, pos0, sizes0, off0 = M.copy(DB.keys), M.copy(DB.pos), M.copy(DB.sizes), M.copy(DB.off)
+	P.OnAccept(dialogSays(" Leveling "))
+	check("... Save: the bars kept as Leveling (copies of which are off, places, sizes), on it now", DB.profile == "Leveling"
+		and #DB.profiles == 1 and DB.profiles[1].pos ~= DB.pos and DB.profiles[1].off ~= DB.off and pick.__text == "Leveling")
+	P.OnAccept(dialogSays("Dungeon"))
+	-- on Dungeon: the Shift keyboard switched off, the keyboard moved, the mouse bar made bigger
+	DB.off.Shift = true
+	DB.pos.Plain = { "TOPLEFT", "BOTTOMLEFT", 111, 222 }
+	DB.sizes.MousePlain = 1.5
+	SlashCmdList.WACKYBARS("status")
+	local function shiftSpares()
+		local n = 0
+		for id in pairs(DB.spare) do if id:match("^Shift") then n = n + 1 end end
+		return n
+	end
+	check("... (Dungeon: Shift keyboard off, its empty spare slots handed back)", shiftSpares() == 0
+		and _G.WackyBarsShift.__shown == false)
+	pick.__scripts.OnClick(pick)
+	local d = DB.profiles[2]
+	check("one click on the name: Leveling's bars back (Shift keyboard on, the keyboard's place, the mouse bar's size)",
+		DB.profile == "Leveling" and pick.__text == "Leveling" and _G.WackyBarsShift.__shown == true and DB.off.Shift == nil
+		and (_G.WackyBarsPlain.__points[1][4] ~= 111) and _G.WackyBarsMousePlain.__scale == 1)
+	check("... the Shift keyboard's free keys get spare slots again (as its box in /wbars does)", shiftSpares() > 0)
+	check("... and Dungeon kept the changes made on it", d.name == "Dungeon" and d.off.Shift == true and d.pos.Plain[3] == 111
+		and d.sizes.MousePlain == 1.5)
+	pick.__scripts.OnClick(pick)
+	check("one more click: Dungeon (keyboard at its place, mouse bar at 150%, Shift keyboard off)", DB.profile == "Dungeon"
+		and _G.WackyBarsPlain.__points[1][4] == 111 and _G.WackyBarsMousePlain.__scale == 1.5 and _G.WackyBarsShift.__shown == false)
+	local same = true
+	for k, v in pairs(keys0) do if DB.keys[k] ~= v then same = false end end
+	for k, v in pairs(DB.keys) do if keys0[k] ~= v then same = false end end
+	check("... keys stay the same in every profile", same)
+	SlashCmdList.WACKYBARS("profile leveling")
+	check("/wbars profile leveling switches to it (for a macro)", DB.profile == "Leveling" and _G.WackyBarsShift.__shown == true)
+	SlashCmdList.WACKYBARS("profile nope")
+	check("... a name that isn't one says so", M.printed[#M.printed]:find("no profile named nope", 1, true) ~= nil)
+	combat = true
+	pick.__scripts.OnClick(pick)
+	combat = false
+	check("in a fight a click switches nothing (after the fight)", DB.profile == "Leveling"
+		and M.printed[#M.printed]:find("after the fight", 1, true) ~= nil)
+	P.OnAlt(dialogSays("dungeon"))
+	check("Delete in the Save box: Dungeon gone, still on Leveling", #DB.profiles == 1 and DB.profile == "Leveling")
+	local posNow = DB.pos
+	P.OnAlt(dialogSays("Leveling"))
+	check("... deleting the one you are on: no profile, the bars stay as they are", DB.profile == nil and #DB.profiles == 0
+		and pick.__text == "None" and DB.pos == posNow)
+	DB.keys, DB.pos, DB.sizes, DB.off, DB.profiles = keys0, pos0, sizes0, off0, nil
+	SlashCmdList.WACKYBARS("status")
+end
+
+-- Panic flash (Panic.lua, his "not a bad idea either"): in a fight, under 30% health, the buttons holding an escape spell (by
+-- name, any rank), a Healthstone or a healing potion pulse; the game sets their opacity from a step curve over your health
+-- (hidden from addons); one box in /wbars switches it off.
+do
+	local hp = 1
+	local curves = {}
+	rawset(_G, "C_CurveUtil", { CreateCurve = function()
+		local c = { points = {} }
+		function c:SetType(t) self.type = t end
+		function c:ClearPoints() self.points = {} end
+		function c:AddPoint(x, y) self.points[#self.points + 1] = { x, y } end
+		curves[#curves + 1] = c
+		return c
+	end })
+	Enum.LuaCurveType = { Step = "Step" }
+	rawset(_G, "UnitHealthPercent", function(unit, _, c) -- (a step curve: the value of the last point at or left of your health)
+		if unit ~= "player" or not c then return hp end
+		local v
+		for _, p in ipairs(c.points) do if p[1] <= hp + 1e-9 then v = p[2] end end
+		return v
+	end)
+	local info, spells, items, macros = {}, { [17926] = "Death Coil", [686] = "Shadow Bolt", [17928] = "Howl of Terror" }, {}, { [3] = 17928 }
+	rawset(_G, "GetActionInfo", function(slot) local i = info[slot] if i then return i[1], i[2], i[3] end end)
+	C_Spell.GetSpellName = function(id) return spells[id] end
+	C_Item.GetItemNameByID = function(id) return items[id] end
+	rawset(_G, "GetMacroSpell", function(id) return macros[id] end)
+	-- four shown buttons with a slot of their own: Death Coil (a rank's id), a Healthstone, Shadow Bolt, a macro casting Howl
+	-- of Terror
+	local picked, seen = {}, {}
+	for _, v in ipairs(M.frames) do
+		if rawget(v, "wb") and v.__shown and v.wb.bar.frame.__shown and #picked < 4 then
+			local kind, slot = v:GetAction()
+			if kind == "action" and type(slot) == "number" and not seen[slot] then
+				seen[slot] = true
+				picked[#picked + 1] = v
+			end
+		end
+	end
+	local A, B, C, D = picked[1], picked[2], picked[3], picked[4]
+	local function slotOf(b) return select(2, b:GetAction()) end
+	info[slotOf(A)], info[slotOf(B)], info[slotOf(C)], info[slotOf(D)] = { "spell", 17926 }, { "item", 5510 }, { "spell", 686 },
+		{ "macro", 3 }
+	local function pulse(b)
+		for _, o in ipairs(M.frames) do
+			if o.__kind == "Frame" and o.__parent == b then
+				for _, t in ipairs(M.frames) do
+					if t.__kind == "CreateTexture" and t.__parent == o and t.__atlas == "UI-HUD-ActionBar-IconFrame-Mouseover" then
+						return o, t, groupOf(t)
+					end
+				end
+			end
+		end
+	end
+	local function pulsing(b)
+		local gate, _, g = pulse(b)
+		return gate and gate.__shown and g and g.__playing and true or false
+	end
+	local function listening(e)
+		for _, o in ipairs(M.frames) do if o.__events[e] and o.__scripts.OnEvent then return true end end
+		return false
+	end
+	check("Panic: four buttons to try it on", D ~= nil)
+	check("... out of a fight nothing pulses and your health is not listened to", not pulse(A) and not listening("UNIT_HEALTH"))
+	combat = true
+	M.fire("PLAYER_REGEN_DISABLED")
+	check("a fight: Death Coil (by name, any rank) and the Howl of Terror macro pulse, Shadow Bolt doesn't",
+		pulsing(A) and pulsing(D) and not pulsing(C))
+	check("... the Healthstone's name not loaded yet: it waits for the game's item info", not pulsing(B)
+		and listening("GET_ITEM_INFO_RECEIVED"))
+	items[5510] = "Major Healthstone"
+	M.fire("GET_ITEM_INFO_RECEIVED", 5510, true)
+	M.flushTimers()
+	check("... and pulses once the game has it (then stops waiting)", pulsing(B) and not listening("GET_ITEM_INFO_RECEIVED"))
+	local gate, tex, g = pulse(A)
+	check("... the game's spell highlight, looping 0.35 s up and down at half strength, tinted with the bar's gradient",
+		tex.__blend == "ADD" and g.__loop == "REPEAT" and g.__anims[1].__to == 0.5 and g.__anims[1].__dur == 0.35
+		and g.__anims[2].__to == 0 and tex.__grad and tex.__desat == true)
+	check("... on the button, so it fades with its bar (QuietHUD's row)", gate.__parent == A)
+	local c = curves[#curves]
+	check("... a step curve over your health: 1 under 30%, 0 from 30% up", c and c.type == "Step" and #c.points == 4
+		and c.points[2][2] == 1 and c.points[3][1] == 0.3 and c.points[3][2] == 0)
+	hp = 0.8
+	M.fire("UNIT_HEALTH", "player")
+	local high = gate.__alpha
+	hp = 0.25
+	M.fire("UNIT_HEALTH", "player")
+	check("... health 80%: hidden; 25%: shown (the game's number, never read here)", high == 0 and gate.__alpha == 1
+		and select(1, pulse(D)).__alpha == 1)
+	M.fire("UNIT_HEALTH", "target")
+	check("... another unit's health changes nothing", gate.__alpha == 1)
+	info[slotOf(A)] = { "spell", 686 }
+	local before = #M.timers
+	M.fire("UPDATE_BONUS_ACTIONBAR")
+	M.fire("ACTIONBAR_SLOT_CHANGED", slotOf(A))
+	check("a page or slot change in a fight: read again once, a frame later", #M.timers == before + 1)
+	M.flushTimers()
+	check("... Death Coil's button now holds Shadow Bolt: it stops", not pulsing(A) and pulsing(D))
+	combat = false
+	M.fire("PLAYER_REGEN_ENABLED")
+	check("the fight ends: every pulse stops, your health is not listened to", not pulsing(B) and not pulsing(D)
+		and not listening("UNIT_HEALTH") and not listening("UPDATE_BONUS_ACTIONBAR"))
+	local noUpdate = true
+	for _, b in ipairs({ A, B, C, D }) do
+		local gt, t = pulse(b)
+		if (gt and gt.__scripts.OnUpdate) or (t and t.__scripts.OnUpdate) then noUpdate = false end
+	end
+	check("... no OnUpdate on any pulse (the game's animations), no timer left", noUpdate and #M.timers == 0)
+	info[slotOf(A)] = { "spell", 17926 }
+	local opts = _G.WackyBarsOptions
+	if not opts.__shown then SlashCmdList.WACKYBARS("") end
+	local box
+	for _, o in ipairs(M.frames) do
+		if o.__parent == opts and o.__text == "Panic flash (escape spells pulse under 30% health)" then box = o.__points[1][2] end
+	end
+	box.__scripts.OnClick(box)
+	combat = true
+	M.fire("PLAYER_REGEN_DISABLED")
+	check("the box in /wbars unticked: a fight pulses nothing, health not listened to", DB.noPanic == true
+		and not pulsing(A) and not listening("UNIT_HEALTH"))
+	combat = false
+	M.fire("PLAYER_REGEN_ENABLED")
+	SlashCmdList.WACKYBARS("")
+	if not opts.__shown then SlashCmdList.WACKYBARS("") end
+	box.__scripts.OnClick(box)
+	combat = true
+	M.fire("PLAYER_REGEN_DISABLED")
+	check("... ticked again: it pulses in the next fight", DB.noPanic == nil and pulsing(A))
+	combat = false
+	M.fire("PLAYER_REGEN_ENABLED")
+end
+
+-- Your keys on Warlock HUD's icons (WhudKeys.lua, his "just like a wackybar thing that overlays the keys their to"): each icon
+-- whose picture is on one of your keys shows that key; Warlock HUD itself is left as it is.
+do
+	local function listening(e)
+		for _, o in ipairs(M.frames) do if o.__events[e] and o.__scripts.OnEvent then return true end end
+		return false
+	end
+	check("Warlock HUD keys: nothing listened to until Warlock HUD is there at login", not listening("ACTIONBAR_SLOT_CHANGED"))
+	-- a plain keyboard button and a Shift keyboard button that show a slot, as they are now
+	local plain, shiftB
+	for _, v in ipairs(M.frames) do
+		if rawget(v, "wb") and v.__shown and v.wb.bar.frame.__shown and v.wb.def and select(1, v:GetAction()) == "action"
+			and DB.keys[v.wb.id] == nil then
+			if v.wb.bar.id == "Plain" and not plain then plain = v end
+			if v.wb.bar.id == "Shift" and not shiftB then shiftB = v end
+		end
+	end
+	local sA, sB = select(2, plain:GetAction()), select(2, shiftB:GetAction())
+	local pics = { [sA] = 136197, [sB] = 136200, [45] = 136300 } -- (45: Action Bar 5 button 9, on Caps Lock, no WackyBars spot)
+	rawset(_G, "GetActionTexture", function(slot) return pics[slot] end)
+	local function icon(parent, x, pic)
+		local t = M.newObj("Texture", nil, parent)
+		rawset(t, "__pic", pic)
+		rawset(t, "GetObjectType", function() return "Texture" end)
+		rawset(t, "GetTextureFileID", function(s) return s.__pic end)
+		rawset(t, "SetTexture", function(s, p) rawset(s, "__pic", p) end)
+		t.__points = { { "CENTER", parent, "CENTER", x, 0 } }
+		return t
+	end
+	local function row(list, holder)
+		local a = M.newObj("Frame")
+		local regions = {}
+		local on = a
+		if holder then
+			on = M.newObj("Frame", nil, a)
+			rawset(on, "GetRegions", function() return unpack(regions) end)
+			rawset(a, "GetRegions", function() end)
+		else
+			rawset(a, "GetRegions", function() return unpack(regions) end)
+		end
+		for i, pic in ipairs(list) do regions[i] = icon(on, i * 40, pic) end
+		rawset(a, "GetChildren", function(s)
+			local out = {}
+			for _, o in ipairs(M.frames) do if o.__parent == s and o.__kind == "Frame" then out[#out + 1] = o end end
+			return unpack(out)
+		end)
+		return a, regions
+	end
+	local mainA, main = row({ 136197, 999 })
+	local utilA, util = row({ 136200 })
+	local buffA, buff = row({ 136300 }, true)
+	local rebuilt = false
+	local main2A, main2 = row({ 136200, 136197 })
+	rawset(_G, "WarlockHudAPI", {
+		GetDemoAnchors = function()
+			if rebuilt then return { main = main2A, utility = utilA, buffs = buffA } end
+			return { main = mainA, utility = utilA, buffs = buffA }
+		end,
+		Rebuild = function() rebuilt = true return true end,
+	})
+	local function keyOn(t)
+		for _, o in ipairs(M.frames) do
+			local p = o.__kind == "CreateFontString" and o.__points[#o.__points]
+			if p and p[2] == t and o.__shown then return o.__text, o end
+		end
+	end
+	local pointsBefore = #main[1].__points
+	M.fire("PLAYER_LOGIN")
+	M.flushTimers()
+	local plainKey = plain.wb.spot.label
+	check(("Warlock HUD's icons show the key: %s (plain keyboard), s%s (Shift keyboard, its modifier shown)"):format(plainKey,
+		shiftB.wb.spot.label), keyOn(main[1]) == plainKey and keyOn(util[1]) == "s" .. shiftB.wb.spot.label)
+	check("... a key bound to a game bar button that is no WackyBars spot: the game's key text", keyOn(buff[1]) == "CAPSLOCK")
+	check("... an icon whose picture is on no key shows none", keyOn(main[2]) == nil)
+	local _, fs = keyOn(main[1])
+	local ov = fs and fs.__parent
+	check("... in WackyBars' own frame on the row, at the icon's top right, like an action button's key", ov
+		and ov.__parent == mainA and fs.__points[#fs.__points][1] == "TOPRIGHT" and not ov.__scripts.OnUpdate)
+	check("... Warlock HUD left as it is (its icons keep their places, its rows get no scripts)", #main[1].__points == pointsBefore
+		and next(mainA.__scripts) == nil and next(buffA.__scripts) == nil)
+	DB.keys[plain.wb.id] = "Z"
+	SlashCmdList.WACKYBARS("status")
+	M.flushTimers()
+	check("a key changed in Edit keys: the icon shows the new key", keyOn(main[1]) == "Z")
+	DB.keys[plain.wb.id] = nil
+	SlashCmdList.WACKYBARS("status")
+	M.flushTimers()
+	main[2]:SetTexture(136200)
+	M.flushTimers()
+	check("Warlock HUD changes an icon's picture: its key follows", keyOn(main[2]) == "s" .. shiftB.wb.spot.label)
+	main[1]:Hide()
+	check("Warlock HUD hides an icon: its key hides too", keyOn(main[1]) == nil)
+	main[1]:Show()
+	check("... and shows again with it", keyOn(main[1]) == plainKey)
+	WarlockHudAPI.Rebuild()
+	M.flushTimers()
+	check("Warlock HUD rebuilds its rows: the keys go onto the new icons", keyOn(main2[1]) == "s" .. shiftB.wb.spot.label
+		and keyOn(main2[2]) == plainKey and fs.__parent.__parent == main2A)
+	M.fire("UPDATE_BINDINGS")
+	M.fire("ACTIONBAR_SLOT_CHANGED", 1)
+	M.fire("ACTIONBAR_SLOT_CHANGED", 2)
+	check("bindings or slots changing: worked out again once, a frame later", #M.timers == 1)
+	M.flushTimers()
+	rawset(_G, "WarlockHudAPI", nil)
+end
+
+objMt.__index = baseIndex -- (the fake game as it was)
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
 for _, e in ipairs(M.errors) do out(e) end

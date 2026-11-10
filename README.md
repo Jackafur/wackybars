@@ -39,9 +39,23 @@ multiplies on top.
 **Bar art** (`/wbars`, a box, off by default): the faint wing in empty buttons, as on Action Bar 1 with its bar art. Off,
 an empty button is a plain dark slot, as on the game's other bars.
 
+**Ding wave:** a level up sweeps one glow in the look's colours across every spot, left to right, about 2 seconds, even
+while QuietHUD has the bars faded (purple to pink with the Default look). `/wbars ding` plays it.
+
+**Profiles** (`/wbars`, the Profiles row): save the layout under a name (leveling, dungeon, PvP) and switch with one click
+on the name; a profile keeps which bars show, where they sit and how big they are. `/wbars profile <name>` from a macro.
+Not in a fight.
+
+**Panic flash** (`/wbars`, a box, on): in a fight under 30% health the buttons of your escape spells pulse (every class's,
+a Healthstone and healing potions too, also in a macro). The game keeps your health hidden in a fight, so the 30% is the
+game's own step curve, the way QuietHUD's Low health works.
+
+**Keys on Warlock HUD:** with Warlock HUD loaded, its icons show the key that casts each spell (WackyBars' own keys too),
+updated when keys or slots change. Warlock HUD itself is not changed.
+
 **Pet keys:** a key bound to a pet bar key in Key Bindings (Alt + F1 to F10 on the Alt mouse bar, say) shows the game's own
 pet button for it: the right abilities for whatever pet is out, autocast and cooldowns as on the game's bar, shown only
-with a pet. The other buttons of that bar stay action buttons. While any pet button sits on a WackyBars bar the game's pet
+with a pet (the spot keeps an empty slot otherwise, also when the pet has nothing in that slot). The other buttons of that bar stay action buttons. While any pet button sits on a WackyBars bar the game's pet
 bar is hidden; QuietHUD fades that whole bar, its other buttons too, with its Pet bar row (Elements page).
 
 Keys bound to moving (ESDF, WASD, whatever Key Bindings say) show a faint arrow instead of a button. The buttons are
