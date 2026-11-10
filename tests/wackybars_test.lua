@@ -663,8 +663,17 @@ local pet1, petSpot = _G.PetActionButton1, _G.WackyBarsMouseAltSide1
 check("Alt + side 1 is a pet key: the game's pet button 1 sits in its spot", pet1:GetParent() == _G.WackyBarsPetMouseAlt
 	and pet1.__points[#pet1.__points][2] == petSpot and _G.PetActionButton2:GetParent() == _G.WackyBarsPetMouseAlt
 	and _G.WackyBarsPetMouseAlt:GetParent() == _G.WackyBarsHoldMouseAlt9)
-check("... sized to the spot, labelled like it, WackyBars' own button hidden, no spare slot", math.abs(pet1.__scale * 30
-	- petSpot:GetHeight()) < 0.01 and pet1.HotKey.__text == "1" and not petSpot.__shown and petSpot.wb.slot == nil)
+check("... sized to the spot, labelled like it, the spot's own button an empty slot under it, no spare slot",
+	math.abs(pet1.__scale * 30 - petSpot:GetHeight()) < 0.01 and pet1.HotKey.__text == "1" and petSpot.__shown == true
+	and petSpot.__alpha == 1 and petSpot:GetAction("0") == "empty" and petSpot.wb.slot == nil)
+-- his pet has nothing in slot 9: the game hides that pet button, the spot keeps its empty slot (his "9 disappeared")
+binds["ALT-F9"] = "BONUSACTIONBUTTON9"
+M.fire("UPDATE_BINDINGS")
+_G.PetActionButton9:Hide() -- (the game: an empty pet slot's button is hidden)
+check("a pet key whose pet slot is empty: the spot still shows its empty slot (his \"9 disappeared\")",
+	_G.WackyBarsMouseAltSide9.__shown == true and _G.WackyBarsMouseAltSide9:GetAction("0") == "empty")
+binds["ALT-F9"] = nil
+M.fire("UPDATE_BINDINGS")
 pet1:SetHotkeys()
 check("... the game's key text is replaced again after a binding change", pet1.HotKey.__text == "1")
 check("... no override: the key stays the game's pet key", overrides["ALT-F1"] == nil)
@@ -711,10 +720,10 @@ do -- (a stand-in Action Bar 1 for this one check, BetterBlizzFrames' dark on it
 end
 -- Edit keys: a pet key's spot shows faint under its pet button, so it can be hovered, given a key or hidden; both at full
 SlashCmdList.WACKYBARS("edit")
-check("Edit keys: the pet key's spot shows faint and empty (reachable), its pet button at full", petSpot.__shown == true
-	and math.abs(petSpot.__alpha - 0.35) < 0.01 and pet1.__ignoreParentAlpha == true)
+check("Edit keys: the pet key's spot shows (reachable: its empty slot under the pet button), its pet button at full",
+	petSpot.__shown == true and petSpot.__alpha == 1 and pet1.__ignoreParentAlpha == true)
 SlashCmdList.WACKYBARS("edit")
-check("... done editing: the spot hidden again, the pet button follows QuietHUD's fade again", petSpot.__shown == false
+check("... done editing: the spot keeps its empty slot, the pet button follows QuietHUD's fade again", petSpot.__shown == true
 	and pet1.__ignoreParentAlpha == false)
 local inHolder9 = {}
 for _, b in ipairs(_G.WackyBarsHoldMouseAlt9.qhudButtons) do inHolder9[b] = true end

@@ -807,7 +807,7 @@ LAB.RegisterCallback(buttons, "OnButtonUpdate", function(_, b)
 	local ref = _G.ActionButton1
 	if ref then colourOne(b, ref) end
 	-- (a hidden button, or a pet key's spot, shows faint while you edit keys; the library's update set it back to full)
-	if editing and b.wb and DB and (DB.hidden[b.wb.id] or b.wb.kind == "pet") then b:SetAlpha(0.35) end
+	if editing and b.wb and DB and DB.hidden[b.wb.id] then b:SetAlpha(0.35) end
 end)
 
 local function spotX(bar, S) return (bar.set.staggers and DB.stagger) and S.sx or S.x end
@@ -1003,6 +1003,8 @@ local function placePets()
 			snapArt(pb) -- (once, before anything here changes it)
 			local h, pf = b.wb.bar.holders[9], b.wb.bar.petFrame
 			if pb:GetParent() ~= pf then pb:SetParent(pf) end
+			-- (above the spot's own empty slot, which shows when the pet has nothing in this slot)
+			if pf:GetFrameLevel() <= b:GetFrameLevel() then pf:SetFrameLevel(b:GetFrameLevel() + 2) end
 			pb.wbBase = pb.wbBase or pb:GetHeight()
 			local bh = b:GetHeight()
 			pb:SetScale((bh and bh > 0 and pb.wbBase and pb.wbBase > 0) and bh / pb.wbBase or 1)
@@ -1086,13 +1088,15 @@ local function apply()
 		-- a hidden button shows, faint, only while you edit keys (so you can right-click it back)
 		-- a button that shows nothing (its bar off, hidden, no slot, a key that moves you) is emptied too, so the library leaves
 		-- it out of its cooldown, usable and range passes (about 170 buttons, most on bars that are off; audit Nov 10)
-		-- (a hidden button with no slot still shows, faint and empty, while you edit keys, so you can right-click it back; a
-		-- pet key's spot too, under its pet button, so it can be hovered, given a key or hidden like any other; audit Nov 10)
-		local hiddenEmpty = editing and (hiddenButton(b) or q.kind == "pet") and not q.slot and barOn(q.bar)
-			and not spotGone(q.spot)
-		if hiddenEmpty then
+		-- (a hidden button with no slot still shows, faint and empty, while you edit keys, so you can right-click it back)
+		local hiddenEmpty = editing and hiddenButton(b) and not q.slot and barOn(q.bar) and not spotGone(q.spot)
+		-- A pet key's spot keeps an empty slot of its own under the game's pet button: the game hides its pet button when
+		-- that slot of the pet bar is empty (or no pet is out), and the spot went blank (his "9 disappeared from my wbars
+		-- petbar", Nov 10 night: his pet has nothing in slot 9). It is also how Edit keys reaches the spot (audit Nov 10).
+		local petMark = q.kind == "pet" and not hiddenButton(b) and barOn(q.bar) and not spotGone(q.spot)
+		if hiddenEmpty or petMark then
 			b:Show()
-			b:SetAlpha(0.35)
+			b:SetAlpha(hiddenEmpty and 0.35 or 1)
 			if tostring(b:GetAttribute("state")) ~= "0" then b:SetAttribute("state", "0") end
 			b:SetState("0", "empty")
 		elseif not q.slot or (hiddenButton(b) and not editing) or spotGone(q.spot) or not barOn(q.bar) then
