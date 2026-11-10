@@ -830,6 +830,112 @@ do -- the Arrows button in /wbars: one click, 30% to 50%
 	SlashCmdList.WACKYBARS("status")
 end
 
+-- The feature files of the ideas he picked on Nov 10 night (Ding.lua, ...): their fakes. The fake game's animations,
+-- texture atlases and blend modes keep what they are given here, so the checks can read them; put back at the end.
+local objMt = getmetatable(UIParent)
+local baseIndex = objMt.__index
+do
+	local REC = { SetAtlas = "__atlas", SetBlendMode = "__blend", SetStartDelay = "__delay", SetFromAlpha = "__from",
+		SetToAlpha = "__to", SetDuration = "__dur", SetLooping = "__loop", SetSmoothing = "__smooth", SetOrder = "__order",
+		SetDesaturated = "__desat" }
+	objMt.__index = function(self, key)
+		if REC[key] then return function(s, v) rawset(s, REC[key], v) return s end end
+		if key == "CreateAnimation" then
+			return function(s, kind)
+				local a = M.newObj("Animation", nil, s)
+				rawset(a, "__animKind", kind)
+				local list = rawget(s, "__anims") or {}
+				list[#list + 1] = a
+				rawset(s, "__anims", list)
+				return a
+			end
+		end
+		if key == "Play" then
+			return function(s) rawset(s, "__playing", true) rawset(s, "__plays", (rawget(s, "__plays") or 0) + 1) return s end
+		end
+		if key == "Stop" then return function(s) rawset(s, "__playing", false) return s end end
+		if key == "IsPlaying" then return function(s) return rawget(s, "__playing") or false end end
+		if key == "SetGradient" then return function(s, o, c0, c1) rawset(s, "__grad", { o, c0, c1 }) return s end end
+		return baseIndex(self, key)
+	end
+end
+local function groupOf(t)
+	for _, o in ipairs(M.frames) do
+		if o.__kind == "CreateAnimationGroup" and o.__parent == t then return o end
+	end
+end
+
+-- Ding wave (Ding.lua, his "this was a nice one"): a level up plays one purple to pink glow across every spot that shows,
+-- left to right, with the game's animations; /wbars ding plays it to look at.
+do
+	local function dingGlow(b)
+		local layer = _G["WackyBarsDing" .. b.wb.bar.id]
+		for _, o in ipairs(M.frames) do
+			if layer and o.__kind == "CreateTexture" and o.__parent == layer then
+				local p = o.__points[#o.__points]
+				if p and p[2] == b then return o end
+			end
+		end
+	end
+	local all = {}
+	for _, v in pairs(_G) do
+		if type(v) == "table" and rawget(v, "wb") and v.wb.bar then all[#all + 1] = v end
+	end
+	local function spotShows(b)
+		local a = b.wb.arrowTex
+		return b.wb.bar.frame.__shown and (b.__shown or (a and a.__shown)) and true or false
+	end
+	local timers = #M.timers
+	rawset(_G.WackyBarsPlainQ, "GetCenter", function() return 100, 50 end)
+	rawset(_G.WackyBarsPlainY, "GetCenter", function() return 400, 50 end)
+	SlashCmdList.WACKYBARS("ding")
+	local want, lit, wrong, arrows = 0, 0, 0, 0
+	for _, b in ipairs(all) do
+		local g = dingGlow(b)
+		if spotShows(b) then
+			want = want + 1
+			if g and g.__shown then lit = lit + 1 end
+			if g and g.__shown and not b.__shown then arrows = arrows + 1 end
+		elseif g and g.__shown then
+			wrong = wrong + 1
+		end
+	end
+	check(("Ding: /wbars ding lights every spot that shows (%d of %d), movement arrows too, nothing else"):format(lit, want),
+		want > 0 and lit == want and wrong == 0 and arrows > 0)
+	local q, yb = dingGlow(_G.WackyBarsPlainQ), dingGlow(_G.WackyBarsPlainY)
+	local gq, gy = q and groupOf(q), yb and groupOf(yb)
+	local riseQ, riseY = gq and gq.__anims and gq.__anims[1], gy and gy.__anims and gy.__anims[1]
+	check("... left to right: the leftmost at once, Q next, Y (rightmost) 1.4 seconds after the first",
+		riseQ and riseY and math.abs(riseQ.__delay - 0.35) < 0.001 and math.abs(riseY.__delay - 1.4) < 0.001
+		and groupOf(dingGlow(_G.WackyBarsPlain1)).__anims[1].__delay == 0)
+	check("... once: fade in 0.25 s to half strength, out in 0.35 s, played by the game (no loop)", gq and gq.__plays == 1
+		and gq.__loop == nil and riseQ.__from == 0 and riseQ.__to == 0.5 and riseQ.__dur == 0.25 and gq.__anims[2].__to == 0
+		and gq.__anims[2].__dur == 0.35)
+	check("... the game's spell highlight, added light, tinted with the button's slice of the bar's gradient",
+		q and q.__atlas == "UI-HUD-ActionBar-IconFrame-Mouseover" and q.__blend == "ADD" and q.__grad
+		and q.__grad[1] == "HORIZONTAL" and q.__desat == true)
+	local layer = _G.WackyBarsDingPlain
+	check("... on the bar itself, not in QuietHUD's faded holders, at full whatever they fade", layer
+		and layer.__parent == _G.WackyBarsPlain and layer.__ignoreParentAlpha == true)
+	local onUpdate = false
+	for _, o in ipairs(M.frames) do
+		if o.__name and o.__name:match("^WackyBarsDing") and o.__scripts.OnUpdate then onUpdate = true end
+	end
+	check("... no OnUpdate and no timer: the game's animations only", not onUpdate and #M.timers == timers)
+	gq.__scripts.OnFinished(gq)
+	check("... when it is done the glow is hidden again", q.__shown == false)
+	DB.off.Shift = true
+	SlashCmdList.WACKYBARS("status")
+	local shiftQ = dingGlow(_G.WackyBarsShiftQ)
+	if shiftQ then shiftQ:Hide() end
+	M.fire("PLAYER_LEVEL_UP", 61, 10, 10, 0, 0, 1, 1, 1, 1, 1)
+	check("a level up (PLAYER_LEVEL_UP) plays it again; a bar switched off stays dark", gq.__plays == 2 and q.__shown == true
+		and not (shiftQ and shiftQ.__shown))
+	DB.off.Shift = nil
+	SlashCmdList.WACKYBARS("status")
+end
+
+objMt.__index = baseIndex -- (the fake game as it was)
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
 for _, e in ipairs(M.errors) do out(e) end
