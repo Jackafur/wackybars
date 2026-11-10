@@ -1119,6 +1119,22 @@ do -- 4: drifting colours. Off by default; a box in the Look list; a timer only 
 	local said = M.printed and M.printed[#M.printed] or ""
 	check("/wbars drift says what it costs: updates, ms each, ms a second", said:find("Drifting colours: 3 updates", 1, true)
 		and said:find("ms a second at 4 a second", 1, true) ~= nil)
+	-- his error of Nov 10 night: QuietHUD's Low health sets a bar's opacity from his hidden health in a fight; the drift
+	-- never compares it ("attempt to compare local 'a' (a secret number value)", 4 a second): such a bar counts as up
+	local SECRET = setmetatable({}, { __lt = function() error("attempt to compare a secret number value") end,
+		__le = function() error("attempt to compare a secret number value") end })
+	rawset(_G, "issecretvalue", function(v) return v == SECRET end)
+	local errorsBefore = #M.errors
+	for _, id in ipairs(ids) do
+		for i = 1, 9 do _G["WackyBarsHold" .. id .. i]:SetAlpha(SECRET) end
+	end
+	local okTick, errTick = pcall(tickers[2].fn)
+	check(("a hidden opacity from Low health is never compared: the drift goes on, no error (%s)"):format(tostring(errTick)),
+		okTick and #M.errors == errorsBefore and not tickers[2].cancelled)
+	for _, id in ipairs(ids) do
+		for i = 1, 9 do _G["WackyBarsHold" .. id .. i]:SetAlpha(1) end
+	end
+	rawset(_G, "issecretvalue", function() return false end)
 	click("Colours drift along the bars")
 	check("unticked: the timer stops, the colours stand still again (#BD93F9 at the bar's left)", tickers[2].cancelled == true
 		and DB.drift == nil and math.abs(qTex.__grad[2].r - 0xBD / 255) < 0.001 and lookBtn.__text == "Purple to pink")

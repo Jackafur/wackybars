@@ -887,10 +887,14 @@ local function fadedLevel()
 	local v = type(q) == "table" and q.idle
 	return type(v) == "number" and v or 0
 end
--- A bar on screen above QuietHUD's Faded (QuietHUD fades the holder its buttons are in).
+-- A bar on screen above QuietHUD's Faded (QuietHUD fades the holder its buttons are in). An opacity QuietHUD set from your
+-- health in a fight (its Low health column) is hidden from addons and can't be compared: such a bar counts as up (his
+-- error of Nov 10 night, "attempt to compare local 'a' (a secret number value)", 4 a second from the drift's timer).
+-- (no local of its own: the file is at the game's 200 locals)
 local function barUp(bar)
 	if not bar.frame:IsVisible() then return false end
 	local a = (bar.arrowHome or bar.frame):GetAlpha()
+	if issecretvalue and issecretvalue(a) then return true end
 	return type(a) == "number" and a > fadedLevel() + 0.01
 end
 -- One button (or a game pet button in a spot) at the new drift: its frame's parts, its glow, its pie.
@@ -966,7 +970,8 @@ end
 local function holderAlpha(h, a)
 	if driftTicker or not driftWanted() then return end
 	local bar = h.wbBar
-	if bar and bar.arrowHome == h and type(a) == "number" and a > fadedLevel() + 0.01 and bar.frame:IsVisible() then
+	if bar and bar.arrowHome == h and bar.frame:IsVisible()
+		and ((issecretvalue and issecretvalue(a)) or (type(a) == "number" and a > fadedLevel() + 0.01)) then -- (hidden: up, see barUp)
 		startDrift()
 	end
 end
