@@ -606,9 +606,37 @@ end
 -- "default and the thing i suggested"): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode tint with it, as
 -- before); Purple to pink colours each button's frame (and its empty slot's wing with Bar art) with a slice of one gradient across its bar,
 -- #BD93F9 to #FF79C6 (his desktop's, the same as his mouse pointer). Set at each look update, no timer.
-local GRAD_FROM, GRAD_TO = { 0xBD / 255, 0x93 / 255, 0xF9 / 255 }, { 0xFF / 255, 0x79 / 255, 0xC6 / 255 }
-local function mix(t) return GRAD_FROM[1] + (GRAD_TO[1] - GRAD_FROM[1]) * t, GRAD_FROM[2] + (GRAD_TO[2] - GRAD_FROM[2]) * t,
-	GRAD_FROM[3] + (GRAD_TO[3] - GRAD_FROM[3]) * t end
+-- More looks (idea 8, Nov 10 night: "one-click swaps that undo as easily as today's two"): four palettes, each two of its own
+-- colours, left to right, picked in the Look list in /wbars; every look colours the same things as Purple to pink (the
+-- buttons, the cooldown pie, the proc glow, the minimap ring, the arrows). Purple to pink already is Dracula's purple to
+-- pink, so Dracula is its cyan to purple; Nord its Frost (nord8 to nord10); Gruvbox its bright orange to bright yellow;
+-- Catppuccin (Mocha) its mauve to peach (mauve to pink would look like Purple to pink). Saved as DB.look (nil: Default;
+-- Purple to pink keeps its old name, "gradient").
+local function hex(n) return { math.floor(n / 65536) / 255, math.floor(n / 256) % 256 / 255, n % 256 / 255 } end
+local LOOKS = {
+	{ id = "gradient", name = "Purple to pink", from = hex(0xBD93F9), to = hex(0xFF79C6) },
+	{ id = "dracula", name = "Dracula", hint = "cyan to purple", from = hex(0x8BE9FD), to = hex(0xBD93F9) },
+	{ id = "nord", name = "Nord", hint = "frost blues", from = hex(0x88C0D0), to = hex(0x5E81AC) },
+	{ id = "gruvbox", name = "Gruvbox", hint = "orange to yellow", from = hex(0xFE8019), to = hex(0xFABD2F) },
+	{ id = "catppuccin", name = "Catppuccin", hint = "mauve to peach", from = hex(0xCBA6F7), to = hex(0xFAB387) },
+}
+local LOOK_BY_ID = {}
+for _, L in ipairs(LOOKS) do LOOK_BY_ID[L.id] = L end
+-- The colour look picked, or nil: Default (also for a saved look this version does not know).
+local function lookOf() return DB and DB.look and LOOK_BY_ID[DB.look] or nil end
+-- (idea 4: how far the colours have drifted, 0 while they don't; Drifting colours, below)
+local drift = { phase = 0 }
+-- A colour of the gradient, t from 0 (left) to 1 (right): the picked look's, Purple to pink's while Default is picked (a
+-- feature file may draw in it then).
+local function mix(t)
+	local L = lookOf() or LOOKS[1]
+	local a, z = L.from, L.to
+	if drift.phase ~= 0 then -- (drifting: the gradient slides along and back again, so it never jumps)
+		t = (t + drift.phase) % 2
+		if t > 1 then t = 2 - t end
+	end
+	return a[1] + (z[1] - a[1]) * t, a[2] + (z[2] - a[2]) * t, a[3] + (z[3] - a[3]) * t
+end
 -- Where a button sits across its bar, 0 (left edge) to 1 (right edge), for its left and right side.
 local function span(b, bar)
 	local bl, bw = b:GetLeft(), b:GetWidth()
@@ -625,16 +653,97 @@ local function gradOn(t, bar, b)
 	t:SetDesaturated(true) -- (the frame's own grey, so the colour reads true)
 	t:SetGradient("HORIZONTAL", CreateColor(r0, g0, b0, 1), CreateColor(r1, g1, b1, 1))
 end
+-- The cooldown pie (his "sounds cool but i dont really get it. but we can try it out maybe", Nov 10 night): in Purple to
+-- pink each button's pie is the colour of its slice of the bar's gradient (the middle of the slice: a pie has one colour),
+-- dimmed so a button on cooldown still reads darker than a ready one (nothing bright on the HUD), and the seconds count down
+-- in the slice's own colour. Only the dark pie: loss of control keeps its red, charges have no pie. Default puts the game's
+-- dark pie back: the template's black at 0.64 (the library never colours it on this client: its cooldowns come from
+-- duration objects and its cast effects are off), on the game's pet buttons the black their own code sets. Written at each
+-- look update, nothing runs in between.
+local PIE_DIM, PIE_ALPHA = 0.4, 0.64
+local function pieOn(b, bar, at)
+	local cd = b.cooldown
+	if type(cd) ~= "table" or not cd.SetSwipeColor then return end
+	local t0, t1 = span(at, bar)
+	local r, g, bl = mix((t0 + t1) / 2)
+	cd:SetSwipeColor(r * PIE_DIM, g * PIE_DIM, bl * PIE_DIM, PIE_ALPHA)
+	local fs = cd.GetCountdownFontString and cd:GetCountdownFontString()
+	if type(fs) == "table" and fs.SetTextColor then
+		if not cd.wbNumbers and fs.GetTextColor then cd.wbNumbers = { fs:GetTextColor() } end
+		fs:SetTextColor(r, g, bl)
+		cd.wbFs = fs -- (for Drifting colours)
+	end
+	cd.wbPie = true
+end
+-- pet: the game's pet button (its own code set its black without an alpha, so it gets the same call back)
+local function pieOff(b, pet)
+	local cd = b.cooldown
+	if type(cd) ~= "table" or not cd.wbPie then return end
+	cd.wbPie = nil
+	if pet then cd:SetSwipeColor(0, 0, 0) else cd:SetSwipeColor(0, 0, 0, PIE_ALPHA) end
+	local fs, o = cd.GetCountdownFontString and cd:GetCountdownFontString(), cd.wbNumbers
+	if type(fs) == "table" and fs.SetTextColor and o and o[1] then fs:SetTextColor(o[1], o[2], o[3], o[4]) end
+end
+-- The proc glow (idea 9, picked with the presets, Nov 10 night): when Nightfall or another proc lights a button up, its glow
+-- takes the button's slice of the gradient instead of the game's yellow; Default keeps the yellow. On this client the button
+-- library draws that glow with LibButtonGlow (its own spell alert switch, Feat_UseVanillaOverlayGlow, is off): a glow frame
+-- of six yellow textures (spark, inner and outer glow, the ants), taken from a pool every addon using that library shares.
+-- So a glow WackyBars coloured gets the game's yellow back as soon as it goes to any other button, and on Default.
+local GLOW_PARTS = { "spark", "innerGlow", "innerGlowOver", "outerGlow", "outerGlowOver", "ants" }
+local function glowOn(b, bar, at)
+	local o = b.__LBGoverlay
+	if type(o) ~= "table" then return end
+	for _, key in ipairs(GLOW_PARTS) do gradOn(o[key], bar, at) end
+	o.wbTint = true
+end
+local function glowOff(o)
+	if type(o) ~= "table" or not o.wbTint then return end
+	o.wbTint = nil
+	for _, key in ipairs(GLOW_PARTS) do
+		local t = o[key]
+		if type(t) == "table" and t.SetVertexColor then
+			t:SetDesaturated(false)
+			t:SetVertexColor(1, 1, 1, 1)
+		end
+	end
+end
+-- After LibButtonGlow shows a glow (a proc lit a button): a WackyBars button's in the look's colours, any other's yellow.
+local function glowShown(frame)
+	local o = type(frame) == "table" and frame.__LBGoverlay
+	if not o then return end
+	local q = frame.wb
+	if q and q.bar and lookOf() then glowOn(frame, q.bar, frame) else glowOff(o) end
+end
+-- Hooked once all addons are in (the first look update), and again if a newer copy of the library loaded later replaced it.
+local glowFn
+local function hookGlow()
+	local LBG = LibStub and LibStub("LibButtonGlow-1.0", true)
+	if type(LBG) ~= "table" or type(LBG.ShowOverlayGlow) ~= "function" or LBG.ShowOverlayGlow == glowFn then return end
+	hooksecurefunc(LBG, "ShowOverlayGlow", glowShown)
+	glowFn = LBG.ShowOverlayGlow
+end
 -- b: a WackyBars button or a game pet button in a spot: its spot's bar, and its spot's slice (the pet button is scaled
 -- into its spot, so its own left and width are in other units; audit Nov 10).
 tint = function(b, bar)
-	if not (DB and DB.look == "gradient") then return end
+	if not lookOf() then
+		pieOff(b, b.wbPetArt)
+		glowOff(b.__LBGoverlay)
+		return
+	end
 	bar = bar or (b.wb and b.wb.bar) or (b.wbSpot and b.wbSpot.wb.bar)
 	if not bar then return end
 	local at = b.wbSpot or b
-	gradOn(part(b, "NormalTexture"), bar, at)
-	gradOn(part(b, "PushedTexture"), bar, at) -- (the pressed frame too: each press flashed the plain one; audit Nov 10)
-	gradOn(part(b, "SlotArt"), bar, at)
+	local nt, pt, sa = part(b, "NormalTexture"), part(b, "PushedTexture"), part(b, "SlotArt")
+	gradOn(nt, bar, at)
+	gradOn(pt, bar, at) -- (the pressed frame too: each press flashed the plain one; audit Nov 10)
+	gradOn(sa, bar, at)
+	pieOn(b, bar, at)
+	glowOn(b, bar, at) -- (a glow already showing)
+	-- (what Drifting colours repaints, kept until the next look update: the slice and the frame's parts)
+	local d = b.wbDrift or {}
+	d.t0, d.t1 = span(at, bar)
+	d[1], d[2], d[3] = nt, pt, sa
+	b.wbDrift = d
 end
 -- A button's colour: Action Bar 1's on the frame, the pressed look and both slots; Purple to pink (tint) goes on top.
 local function colourOne(b, ref)
@@ -649,6 +758,7 @@ end
 -- on the right. BetterBlizzFrames' Dark Mode writes their colour again now and then: a hook on each (only once Purple to
 -- pink was picked) puts the gradient back on top and keeps what was written, so Default puts exactly that back.
 local mapBusy = false
+local mapList = {} -- (the minimap's textures at the last look update, for Drifting colours)
 local function mapTextures()
 	local out = {}
 	local function add(t) if type(t) == "table" and t.SetGradient and t.GetVertexColor then out[#out + 1] = t end end
@@ -682,7 +792,7 @@ local function mapSlices(list)
 end
 local function mapOne(t)
 	mapBusy = true
-	if DB and DB.look == "gradient" then
+	if lookOf() then
 		local sl = t.wbSlice
 		local r0, g0, b0 = mix(sl and sl[1] or 0)
 		local r1, g1, b1 = mix(sl and sl[2] or 1)
@@ -700,27 +810,204 @@ end
 local function mapLook()
 	if not CreateColor then return end
 	local list = mapTextures()
-	if DB and DB.look == "gradient" then mapSlices(list) end
+	mapList = list
+	if lookOf() then mapSlices(list) end
 	for _, t in ipairs(list) do
-		if not t.wbOrig and DB and DB.look == "gradient" then
+		if not t.wbOrig and lookOf() then
 			local r, g, b = t:GetVertexColor()
 			t.wbOrig = { r or 1, g or 1, b or 1, (t.IsDesaturated and t:IsDesaturated()) and true or false }
 			hooksecurefunc(t, "SetVertexColor", function(self, r2, g2, b2)
 				if mapBusy then return end
 				self.wbOrig[1], self.wbOrig[2], self.wbOrig[3] = r2 or 1, g2 or 1, b2 or 1
-				if DB.look == "gradient" then mapOne(self) end
+				if lookOf() then mapOne(self) end
 			end)
 			hooksecurefunc(t, "SetDesaturated", function(self, v)
 				if mapBusy then return end
 				self.wbOrig[4] = v and true or false
-				if DB.look == "gradient" then mapOne(self) end
+				if lookOf() then mapOne(self) end
 			end)
 		end
 		if t.wbOrig then mapOne(t) end
 	end
 end
+-- Glass (idea 3, his "maybe this to", Nov 10 night): WoW can't blur, so it is a dark see-through panel behind each bar, a
+-- little bigger than the bar, in the look's two colours dimmed: one clean panel per bar, not the shadow per button that was
+-- the "phantom box". Glass behind each bar, a box in the Look list, goes with any colour look; Default shows none. It sits
+-- in the holder QuietHUD fades, so it fades with its bar's buttons (on the bar itself while you edit keys or move bars,
+-- like the arrows). Made the first time it shows; written at each look update, nothing runs in between.
+local GLASS_DIM, GLASS_ALPHA, GLASS_PAD = 0.25, 0.5, 6
+local function glassHome(bar) return ((editing or moving) and bar.frame) or bar.arrowHome or bar.frame end
+local function glassLook()
+	local on = lookOf() and DB.glass and CreateColor and true or false
+	local r0, g0, b0 = mix(0)
+	local r1, g1, b1 = mix(1)
+	for _, bar in ipairs(wbBars) do
+		local t = bar.frame.wbGlass
+		if on and not t then
+			t = bar.frame:CreateTexture("WackyBarsGlass" .. bar.id, "BACKGROUND")
+			t:SetTexture("Interface\\Buttons\\WHITE8X8")
+			t:SetPoint("TOPLEFT", bar.frame, "TOPLEFT", -GLASS_PAD, GLASS_PAD)
+			t:SetPoint("BOTTOMRIGHT", bar.frame, "BOTTOMRIGHT", GLASS_PAD, -GLASS_PAD)
+			bar.frame.wbGlass = t
+		end
+		if t and on then
+			t:SetParent(glassHome(bar))
+			t:SetGradient("HORIZONTAL", CreateColor(r0 * GLASS_DIM, g0 * GLASS_DIM, b0 * GLASS_DIM, GLASS_ALPHA),
+				CreateColor(r1 * GLASS_DIM, g1 * GLASS_DIM, b1 * GLASS_DIM, GLASS_ALPHA))
+			t:Show()
+		elseif t then
+			t:Hide()
+		end
+	end
+end
+-- Drifting colours (idea 4, his "yes", Nov 10 night): off by default, a box in the Look list for any colour look. The
+-- gradient slides slowly along each bar and back again (DRIFT_ROUND seconds there and back), DRIFT_HZ colour updates a
+-- second: the buttons' frames, their cooldown pies and proc glows, the game's pet buttons in spots, the arrows, the glass
+-- and the minimap ring. It runs only while a WackyBars bar is on screen above QuietHUD's Faded (the Global Faded,
+-- QuietHUDDB.idle, which every bar fades to; 0 without QuietHUD). When none is, the timer is cancelled; a hook on the bars'
+-- holders (what QuietHUD fades) or the bars coming back on screen starts it again. A tick reuses two colours, so it makes
+-- no garbage, and times itself: /wbars drift says what it costs (he measures it before keeping it on).
+local DRIFT_HZ, DRIFT_ROUND = 4, 24
+local driftTicker, driftHooked, cA, cB
+local driftCost = { n = 0, ms = 0, worst = 0 }
+local function driftWanted() return (lookOf() and DB.drift and CreateColor) and true or false end
+-- (fills the two colours for a slice, k times as bright, at alpha)
+local function fill(c, t, k, alpha)
+	local r, g, b = mix(t)
+	r, g, b = r * k, g * k, b * k
+	if c.SetRGBA then c:SetRGBA(r, g, b, alpha) else c.r, c.g, c.b, c.a = r, g, b, alpha end
+end
+local function pair(t0, t1, k, alpha)
+	if not cA then cA, cB = CreateColor(0, 0, 0, 1), CreateColor(0, 0, 0, 1) end
+	fill(cA, t0, k, alpha)
+	fill(cB, t1, k, alpha)
+end
+local function fadedLevel()
+	local q = _G.QuietHUDDB
+	local v = type(q) == "table" and q.idle
+	return type(v) == "number" and v or 0
+end
+-- A bar on screen above QuietHUD's Faded (QuietHUD fades the holder its buttons are in).
+local function barUp(bar)
+	if not bar.frame:IsVisible() then return false end
+	local a = (bar.arrowHome or bar.frame):GetAlpha()
+	return type(a) == "number" and a > fadedLevel() + 0.01
+end
+-- One button (or a game pet button in a spot) at the new drift: its frame's parts, its glow, its pie.
+local function repaint(b)
+	local d = b.wbDrift
+	if not (d and d.t0) then return end
+	pair(d.t0, d.t1, 1, 1)
+	for i = 1, (DB.barArt and 3 or 2) do
+		if d[i] then d[i]:SetGradient("HORIZONTAL", cA, cB) end
+	end
+	local o = b.__LBGoverlay
+	if type(o) == "table" and o.wbTint then
+		for _, key in ipairs(GLOW_PARTS) do
+			if o[key] then o[key]:SetGradient("HORIZONTAL", cA, cB) end
+		end
+	end
+	local cd = b.cooldown
+	if type(cd) == "table" and cd.wbPie then
+		local r, g, bl = mix((d.t0 + d.t1) / 2)
+		cd:SetSwipeColor(r * PIE_DIM, g * PIE_DIM, bl * PIE_DIM, PIE_ALPHA)
+		if cd.wbFs then cd.wbFs:SetTextColor(r, g, bl) end
+	end
+end
+local function stopDrift()
+	if driftTicker then
+		driftTicker:Cancel()
+		driftTicker = nil
+	end
+end
+local function driftTick()
+	if not driftWanted() then stopDrift() return end
+	local start = debugprofilestop and debugprofilestop()
+	drift.phase = (drift.phase + 2 / (DRIFT_ROUND * DRIFT_HZ)) % 2
+	local any = false
+	for _, bar in ipairs(wbBars) do
+		if barUp(bar) then
+			any = true
+			for _, b in ipairs(bar.buttons) do repaint(b) end
+			for _, a in ipairs(bar.arrows) do
+				if a.on and a.t0 then
+					pair(a.t0, a.t1, 1, 1)
+					a.tex:SetGradient("HORIZONTAL", cA, cB)
+				end
+			end
+			local g = bar.frame.wbGlass
+			if g and DB.glass then
+				pair(0, 1, GLASS_DIM, GLASS_ALPHA)
+				g:SetGradient("HORIZONTAL", cA, cB)
+			end
+		end
+	end
+	for n = 1, 10 do
+		local pb = _G["PetActionButton" .. n]
+		if pb and pb.wbSpot and barUp(pb.wbSpot.wb.bar) then repaint(pb) end
+	end
+	for _, t in ipairs(mapList) do
+		if t.wbGrad then
+			local sl = t.wbSlice
+			pair(sl and sl[1] or 0, sl and sl[2] or 1, 1, 1)
+			t:SetGradient("HORIZONTAL", cA, cB)
+		end
+	end
+	if not any then stopDrift() end
+	if start then
+		local ms = debugprofilestop() - start
+		driftCost.n, driftCost.ms, driftCost.worst = driftCost.n + 1, driftCost.ms + ms, math.max(driftCost.worst, ms)
+	end
+end
+local function startDrift()
+	if not driftTicker then driftTicker = C_Timer.NewTicker(1 / DRIFT_HZ, driftTick) end
+end
+-- QuietHUD wrote a holder's opacity: a bar coming back above the Faded starts the stopped drift (one check, only then).
+local function holderAlpha(h, a)
+	if driftTicker or not driftWanted() then return end
+	local bar = h.wbBar
+	if bar and bar.arrowHome == h and type(a) == "number" and a > fadedLevel() + 0.01 and bar.frame:IsVisible() then
+		startDrift()
+	end
+end
+-- At each look update (and the bars coming back on screen): starts or stops the drift; off, the colours stand still again.
+local function driftCheck()
+	if not driftWanted() then
+		stopDrift()
+		drift.phase = 0
+		return
+	end
+	if not driftHooked then
+		driftHooked = true
+		for _, bar in ipairs(wbBars) do
+			for _, h in ipairs(bar.holders) do
+				h.wbBar = bar
+				hooksecurefunc(h, "SetAlpha", holderAlpha)
+			end
+		end
+		container:HookScript("OnShow", driftCheck)
+	end
+	for _, bar in ipairs(wbBars) do
+		if barUp(bar) then
+			startDrift()
+			return
+		end
+	end
+end
+-- /wbars drift: what the drift costs, measured in game.
+local function driftReport()
+	if driftCost.n == 0 then
+		return "Drifting colours: not run yet (a colour look, its box in the Look list, and a bar on screen above QuietHUD's Faded)."
+	end
+	local avg = driftCost.ms / driftCost.n
+	return ("Drifting colours: %d updates, %.3f ms each on average (%.3f at most), %.2f ms a second at %d a second%s."):format(
+		driftCost.n, avg, driftCost.worst, avg * DRIFT_HZ, DRIFT_HZ, driftTicker and "" or "; stopped now")
+end
 local function matchLook()
+	driftCheck() -- (first: the colours below start from where the drift is, or from still)
+	hookGlow()
 	mapLook()
+	glassLook()
 	local ref = _G.ActionButton1
 	if not ref then return end
 	-- (only the colour here: the art is laid out by layout and after each of the library's updates)
@@ -732,9 +1019,11 @@ local function matchLook()
 			local t = a.tex
 			-- (their opacity: the Arrows button in the options, 30% unless picked; QuietHUD's fade multiplies on top)
 			t:SetAlpha(DB and DB.arrowAlpha or 0.3)
-			if DB and DB.look == "gradient" then
+			if lookOf() then
 				gradOn(t, bar, t)
 				t.wbGrad = true
+				a.t0, a.t1 = span(t, bar) -- (for Drifting colours: only the arrows that show)
+				a.on = t:IsShown() and true or false
 			elseif t.wbGrad then
 				t.wbGrad = nil
 				t:SetVertexColor(1, 1, 1)
@@ -1023,6 +1312,7 @@ local function placePets()
 		elseif pb and petMoved[n] then
 			petMoved[n], pb.wbSpot, pb.wbPetArt = nil, nil, nil
 			restoreArt(pb)
+			pieOff(pb, true) -- (its dark pie back too)
 			if pb.SetIgnoreParentAlpha then pb:SetIgnoreParentAlpha(false) end
 			pb:SetParent(pb.container or _G.PetActionBar or UIParent)
 			pb:SetScale(1)
@@ -1215,6 +1505,8 @@ local function showFull(on)
 	-- bar's arrows were gone in Move bars, Nov 10)
 	for _, bar in ipairs(wbBars) do
 		for _, a in ipairs(bar.arrows) do a.tex:SetParent(on and bar.frame or bar.arrowHome or bar.frame) end
+		-- (the glass too, idea 3: under the arrows there, and back in its holder after, Move bars closing without an apply)
+		if bar.frame.wbGlass then bar.frame.wbGlass:SetParent(glassHome(bar)) end
 	end
 end
 
@@ -1906,14 +2198,48 @@ local function toggleOptions()
 		end)
 		controls[#controls + 1] = function() moveCycle:SetText(DB.moveKeys or "From Key Bindings") end
 		below = below - 30
-		-- Look: Default (your Action Bar 1's, BetterBlizzFrames' dark with it) or Purple to pink (the look block above)
+		-- Look: Default (your Action Bar 1's, BetterBlizzFrames' dark with it) or a colour look (the look block above). Six looks
+		-- are too many to step through one click at a time, so the button opens a short list, the game's own menu: any look in
+		-- two clicks, Default always on top (idea 8, decided by the commandments: clear, most intuitive). Without that menu it
+		-- steps through them.
 		text(24, below - 86, "Look", "GameFontHighlight")
-		local lookCycle = button(150, below - 80, 160, "", function()
-			DB.look = (DB.look ~= "gradient") and "gradient" or nil
+		local function setLook(id)
+			DB.look = id
 			matchLook()
 			if refreshOptions then refreshOptions() end -- (its label: it kept the old look's name; audit Nov 10)
+		end
+		local function lookMenu(_, root)
+			root:CreateRadio("Default", function() return not lookOf() end, function() setLook(nil) end)
+			for _, L in ipairs(LOOKS) do
+				root:CreateRadio(L.hint and (L.name .. " (" .. L.hint .. ")") or L.name, function() return lookOf() == L end,
+					function() setLook(L.id) end)
+			end
+			-- glass (idea 3) and the drift (idea 4): one box each for every colour look rather than each look twice; greyed
+			-- while Default is picked (kept for when a colour look comes back)
+			if root.CreateDivider then root:CreateDivider() end
+			for _, box in ipairs({ { "Glass behind each bar", "glass" }, { "Colours drift along the bars", "drift" } }) do
+				local key = box[2]
+				local e = root.CreateCheckbox and root:CreateCheckbox(box[1], function() return DB[key] end, function()
+					DB[key] = (not DB[key]) or nil
+					matchLook()
+					if refreshOptions then refreshOptions() end
+				end)
+				if type(e) == "table" and e.SetEnabled then e:SetEnabled(function() return lookOf() ~= nil end) end
+			end
+		end
+		local lookButton = button(150, below - 80, 210, "", function(self) -- (wider: "Purple to pink + glass + drift")
+			if MenuUtil and MenuUtil.CreateContextMenu then
+				MenuUtil.CreateContextMenu(self, lookMenu)
+				return
+			end
+			local at = 0
+			for i, L in ipairs(LOOKS) do if lookOf() == L then at = i end end
+			setLook(LOOKS[at + 1] and LOOKS[at + 1].id or nil)
 		end)
-		controls[#controls + 1] = function() lookCycle:SetText(DB.look == "gradient" and "Purple to pink" or "Default") end
+		controls[#controls + 1] = function()
+			local L = lookOf()
+			lookButton:SetText(L and (L.name .. (DB.glass and " + glass" or "") .. (DB.drift and " + drift" or "")) or "Default")
+		end
 		below = below - 30
 		-- Bar art: the faint wing in empty buttons, as on Action Bar 1 with its bar art; off (the default) a plain dark slot, as
 		-- on the game's other bars (his "any way to turn the bar art off in wbars?", Nov 10)
@@ -2134,11 +2460,13 @@ SlashCmdList.WACKYBARS = function(msg)
 	elseif cmd == "status" then
 		if not InCombatLockdown() then port() apply() end
 		summary()
+	elseif cmd == "drift" then
+		say(driftReport())
 	else
 		local words = {}
 		for w in pairs(ns.wb and ns.wb.slash or {}) do words[#words + 1] = w end
 		table.sort(words)
-		say("/wbars (options), move, edit, scale <n|auto>, stagger, reset, status" .. (#words > 0 and (", " .. table.concat(words, ", ")) or ""))
+		say("/wbars (options), move, edit, scale <n|auto>, stagger, reset, status, drift" .. (#words > 0 and (", " .. table.concat(words, ", ")) or ""))
 	end
 end
 
@@ -2149,6 +2477,7 @@ end
 ns.wb = {
 	buttons = buttons, bars = wbBars, db = function() return DB end, say = say,
 	part = part, art = art, mix = mix, gradOn = gradOn, span = span, tint = tint, colourOne = colourOne,
+	lookOf = lookOf, -- (the colour look picked, { id, name, from, to }, or nil for Default)
 	effKey = effKey, hotkeyText = hotkeyText, matchLook = matchLook, apply = apply, barOn = barOn,
 	editing = function() return editing end, moving = function() return moving end,
 	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {},

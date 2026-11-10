@@ -22,9 +22,16 @@ onto another; where two overlap, the later one's box is on top.
 off, so their keys and stealth / vehicle paging still work). The stance and possess bars stay the game's. All
 WackyBars bars off, or WackyBars off in the AddOns list: the game's bars are back.
 
-**Look** (`/wbars`, one button): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode tint with it) or Purple to
-pink, one gradient across each bar, `#BD93F9` to `#FF79C6` (the desktop's colours), on the pet buttons in it too, and on the minimap's ring (the game's, BetterBlizzFrames' classic border and day / night ring).
-Back to Default puts BetterBlizzFrames' own colours back at once, no reload. The movement arrows take the look too.
+**Look** (`/wbars`, one button that opens a short list): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode
+tint with it). The colour looks put one gradient across each bar: Purple to pink (`#BD93F9` to `#FF79C6`, the desktop's
+colours), Dracula (`#8BE9FD` to `#BD93F9`), Nord (`#88C0D0` to `#5E81AC`), Gruvbox (`#FE8019` to `#FABD2F`) or Catppuccin
+(`#CBA6F7` to `#FAB387`). Each button takes its slice: its frame, its cooldown pie (dimmed, the seconds in the slice's
+colour) and a proc's glow; the pet buttons in it too, the movement arrows, and the minimap's ring (the game's,
+BetterBlizzFrames' classic border and day / night ring). Glass behind each bar (a box in the same list, for any colour
+look): a dark see-through panel in the look's colours, a little bigger than each bar, fading with it. Colours drift along
+the bars (a box in the same list, off by default): the gradient slides slowly along each bar and back, 4 colour updates a
+second, only while a bar shows above QuietHUD's Faded; `/wbars drift` says what it costs. Back to Default puts the game's
+dark pie, the yellow glow and BetterBlizzFrames' own colours back at once, shows no glass and stops the drift, no reload.
 
 **Arrows** (`/wbars`, one button): how strong the movement arrows are, 20, 30 (default), 50, 70 or 100%. QuietHUD's fade
 multiplies on top.
@@ -85,7 +92,7 @@ is not faded. Pixel shift moves the bars. WackyBars has no fade settings of its 
 - **Edit keys:** hover a button, press the key you want (modifiers, middle and side mouse buttons, wheel). Esc on a
   button clears its key, right-click hides a button (faint while editing, right-click again brings it back),
   Esc elsewhere finishes. All of it is override bindings, gone when WackyBars is off.
-- Slash: `/wbars move`, `edit`, `scale <n|auto>` (every bar), `stagger`, `reset`, `status`.
+- Slash: `/wbars move`, `edit`, `scale <n|auto>` (every bar), `stagger`, `reset`, `status`, `drift` (what Colours drift costs).
 - **First load after Nov 10** (and a new character): plain bars and Hypershift on, the copies off; the old mouse over,
   hide in fight, Lite and game bars settings, and spare slots of buttons that no longer exist, are dropped. Once only.
 

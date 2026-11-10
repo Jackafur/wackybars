@@ -839,6 +839,300 @@ do -- the Arrows button in /wbars: one click, 30% to 50%
 	SlashCmdList.WACKYBARS("status")
 end
 
+-- The look tab's ideas (Nov 10 night, his picks 2, 9, 8, 3, 4), each in its own block. The fakes they need are made here.
+do -- 2: the gradient cooldown pie. Default leaves the game's dark pie; Purple to pink gives each button its slice's colour.
+	local function pieFakes(cd)
+		local fs = M.newObj("FontString")
+		fs.__tc = { 1, 1, 1, 1 }
+		rawset(fs, "SetTextColor", function(s, r, g, b, a) s.__tc = { r, g, b, a } end)
+		rawset(fs, "GetTextColor", function(s) return s.__tc[1], s.__tc[2], s.__tc[3], s.__tc[4] end)
+		rawset(cd, "SetSwipeColor", function(s, r, g, b, a) s.__swipe = { r, g, b, a } end)
+		rawset(cd, "GetCountdownFontString", function() return fs end)
+		return fs
+	end
+	local qCd = _G.WackyBarsPlainQ.cooldown
+	local qNum = pieFakes(qCd)
+	SlashCmdList.WACKYBARS("status")
+	check("Default: the cooldown pie and its seconds stay as the game has them", qCd.__swipe == nil and qNum.__tc[1] == 1)
+	DB.look = "gradient"
+	SlashCmdList.WACKYBARS("status")
+	local sw, tc = qCd.__swipe, qNum.__tc
+	check("Purple to pink: Q's pie is its slice's colour dimmed to 40%, at the game's 0.64; the seconds in the slice's colour",
+		sw and math.abs(sw[4] - 0.64) < 0.001 and math.abs(sw[1] - tc[1] * 0.4) < 0.001 and math.abs(sw[2] - tc[2] * 0.4) < 0.001
+		and math.abs(sw[3] - tc[3] * 0.4) < 0.001 and tc[1] >= 0xBD / 255 - 0.01 and tc[3] <= 0xF9 / 255 + 0.01
+		and tc[3] >= 0xC6 / 255 - 0.01)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+	sw = qCd.__swipe
+	check("Default again: the game's dark pie back (black at 0.64), the seconds white again", sw[1] == 0 and sw[2] == 0
+		and sw[3] == 0 and math.abs(sw[4] - 0.64) < 0.001 and qNum.__tc[1] == 1 and qNum.__tc[2] == 1 and qNum.__tc[3] == 1)
+	-- the game's pet button in a spot: its slice's pie too, and the black its own code sets once it is back in its bar
+	local petCd = M.newObj("Cooldown", nil, pet1)
+	rawset(pet1, "cooldown", petCd)
+	pieFakes(petCd)
+	DB.look = "gradient"
+	binds["ALT-F1"] = "BONUSACTIONBUTTON1"
+	M.fire("UPDATE_BINDINGS")
+	check("Purple to pink: the game's pet button in a spot gets its slice's pie too", pet1:GetParent() == _G.WackyBarsPetMouseAlt
+		and petCd.__swipe and math.abs(petCd.__swipe[4] - 0.64) < 0.001 and petCd.__swipe[3] > 0)
+	binds["ALT-F1"] = nil
+	M.fire("UPDATE_BINDINGS")
+	check("... back in the game's pet bar: the black its own code sets (no alpha), whatever the look", petCd.__swipe[1] == 0
+		and petCd.__swipe[3] == 0 and petCd.__swipe[4] == nil and pet1:GetParent() == _G.PetActionBarButtonContainer1)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+end
+do -- 9: the proc glow. LibButtonGlow as the library has it: glow frames of six textures, from a pool shared by every addon.
+	local LBG, pool = {}, {}
+	function LBG.ShowOverlayGlow(frame)
+		if rawget(frame, "__LBGoverlay") then return end
+		local o = table.remove(pool)
+		if not o then
+			o = {}
+			for _, k in ipairs({ "spark", "innerGlow", "innerGlowOver", "outerGlow", "outerGlowOver", "ants" }) do o[k] = tex() end
+		end
+		rawset(frame, "__LBGoverlay", o)
+	end
+	function LBG.HideOverlayGlow(frame)
+		local o = rawget(frame, "__LBGoverlay")
+		if o then pool[#pool + 1] = o; rawset(frame, "__LBGoverlay", nil) end
+	end
+	local oldStub = LibStub
+	rawset(_G, "LibStub", setmetatable({}, { __call = function(_, n, silent)
+		if n == "LibButtonGlow-1.0" then return LBG end
+		return oldStub(n, silent)
+	end }))
+	SlashCmdList.WACKYBARS("status") -- (a look update: the glow is hooked once the library is there)
+	local Q = _G.WackyBarsPlainQ
+	LBG.ShowOverlayGlow(Q)
+	local o = rawget(Q, "__LBGoverlay")
+	check("Default: a proc on Q shows the game's yellow glow, untouched", o and o.ants.__grad == nil and not o.ants.__desat)
+	DB.look = "gradient"
+	SlashCmdList.WACKYBARS("status")
+	check("Purple to pink: the glow already showing takes Q's slice, all six parts (#BD93F9 at the bar's left)",
+		o.ants.__grad and o.ants.__desat == true and o.outerGlow.__grad and o.spark.__grad
+		and math.abs(o.ants.__grad[2].r - 0xBD / 255) < 0.01 and o.ants.__grad[1] == "HORIZONTAL")
+	LBG.HideOverlayGlow(Q)
+	local other = M.newObj("CheckButton", "SomeOtherAddonButton") -- (another addon's button using the same library)
+	LBG.ShowOverlayGlow(other)
+	local o2 = rawget(other, "__LBGoverlay")
+	check("... that glow frame goes back to the shared pool: on another addon's button it is the game's yellow again",
+		o2 == o and o2.ants.__grad == nil and o2.ants.__desat == false and o2.ants.__vc and o2.ants.__vc[1] == 1
+		and o2.innerGlow.__vc and o2.innerGlow.__vc[3] == 1)
+	LBG.HideOverlayGlow(other)
+	LBG.ShowOverlayGlow(Q)
+	check("... a new proc on Q: its slice again", rawget(Q, "__LBGoverlay").ants.__grad ~= nil)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+	o = rawget(Q, "__LBGoverlay")
+	check("Default again: Q's glow is the game's yellow (white, not greyed)", o.ants.__grad == nil and o.ants.__desat == false
+		and o.ants.__vc[1] == 1 and o.ants.__vc[2] == 1 and o.ants.__vc[3] == 1)
+	LBG.HideOverlayGlow(Q)
+	rawset(_G, "LibStub", oldStub)
+end
+do -- 8: more looks. The Look button opens a short list (the game's menu); each look colours what Purple to pink does.
+	if not _G.WackyBarsOptions:IsShown() then SlashCmdList.WACKYBARS("") end
+	local lookBtn
+	for _, f in ipairs(M.frames) do
+		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+	end
+	check("the Look button in /wbars shows Default", lookBtn ~= nil)
+	if lookBtn then lookBtn.__scripts.OnClick(lookBtn) end
+	check("without the game's menu a click steps to the next look: Purple to pink, and says so", DB.look == "gradient"
+		and lookBtn.__text == "Purple to pink")
+	local menuOwner, menuGen
+	rawset(_G, "MenuUtil", { CreateContextMenu = function(owner, gen) menuOwner, menuGen = owner, gen end })
+	lookBtn.__scripts.OnClick(lookBtn)
+	local radios = {}
+	local root = { CreateRadio = function(_, text, isSel, set) radios[#radios + 1] = { text = text, isSel = isSel, set = set } end }
+	if menuGen then menuGen(menuOwner, root) end
+	check("with the game's menu a click opens the list: six looks, Default first, the one picked marked", menuOwner == lookBtn
+		and #radios == 6 and radios[1].text == "Default" and radios[2].text == "Purple to pink" and radios[2].isSel()
+		and not radios[1].isSel() and radios[3].text == "Dracula (cyan to purple)" and DB.look == "gradient")
+	local function pick(name)
+		for _, r in ipairs(radios) do if r.text:find(name, 1, true) == 1 then r.set() end end
+	end
+	pick("Nord")
+	local g = qTex.__grad
+	check("Nord picked: the label says Nord, Q's frame starts at Nord's #88C0D0 on the bar's left, toward #5E81AC", DB.look == "nord"
+		and lookBtn.__text == "Nord" and g and math.abs(g[2].r - 0x88 / 255) < 0.01 and math.abs(g[2].g - 0xC0 / 255) < 0.01
+		and g[3].r < 0x88 / 255 and radios[4].isSel())
+	check("... the minimap ring and the arrows follow Nord (#88C0D0 to #5E81AC)", ring.__grad
+		and math.abs(ring.__grad[2].b - 0xD0 / 255) < 0.01 and math.abs(ring.__grad[3].r - 0x5E / 255) < 0.01 and arrowT.__grad ~= nil)
+	local starts, allOk = { Dracula = 0x8BE9FD, Gruvbox = 0xFE8019, Catppuccin = 0xCBA6F7 }, true
+	for name, hx in pairs(starts) do
+		pick(name)
+		local s = qTex.__grad and qTex.__grad[2]
+		if not (s and math.abs(s.r - math.floor(hx / 65536) / 255) < 0.01 and math.abs(s.b - hx % 256 / 255) < 0.01
+			and lookBtn.__text == name) then allOk = false end
+	end
+	check("Dracula, Gruvbox and Catppuccin each start at their own colour (cyan, orange, mauve) and say their name", allOk)
+	pick("Default")
+	check("Default from the list: Q has Action Bar 1's dark again, the ring BetterBlizzFrames' dark, the arrows grey",
+		DB.look == nil and qTex.__grad == nil and qTex.__vc and qTex.__vc[1] == 0.2 and ring.__grad == nil and ring.__vc[1] == 0.3
+		and arrowT.__grad == nil and lookBtn.__text == "Default")
+	DB.look = "someday" -- (a look a newer version saved)
+	SlashCmdList.WACKYBARS("status")
+	check("a saved look this version does not know shows Default", qTex.__grad == nil and qTex.__vc[1] == 0.2 and ring.__grad == nil)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+	rawset(_G, "MenuUtil", nil)
+end
+do -- 3: glass. A box in the Look list for every colour look: one dark see-through panel per bar, in the bar's holder.
+	for _, n in ipairs({ "WackyBarsPlain", "WackyBarsMouseHyper" }) do -- (their glass records its colours)
+		rawset(_G[n], "CreateTexture", function(s, _, layer)
+			local t = tex()
+			t.__parent, t.__layer = s, layer
+			return t
+		end)
+	end
+	local lookBtn
+	for _, f in ipairs(M.frames) do
+		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+	end
+	local entries = {}
+	local root = {
+		CreateRadio = function(_, text, isSel, set) entries[#entries + 1] = { text = text, isSel = isSel, set = set } end,
+		CreateDivider = function() end,
+		CreateCheckbox = function(_, text, isSel, set)
+			local e = { text = text, isSel = isSel, set = set, box = true }
+			function e:SetEnabled(v) self.enabled = v end
+			entries[#entries + 1] = e
+			return e
+		end,
+	}
+	rawset(_G, "MenuUtil", { CreateContextMenu = function(owner, gen) wipe(entries) gen(owner, root) end })
+	local function click(name)
+		lookBtn.__scripts.OnClick(lookBtn)
+		for _, e in ipairs(entries) do if e.text:find(name, 1, true) == 1 then e.set() return e end end
+	end
+	lookBtn.__scripts.OnClick(lookBtn)
+	local box
+	for _, e in ipairs(entries) do if e.text == "Glass behind each bar" then box = e end end
+	check("the Look list has a box, Glass behind each bar, after the looks, greyed while Default is picked", box and box.box
+		and entries[7] == box and type(box.enabled) == "function" and box.enabled() == false and not box.isSel())
+	check("Default: no glass is made", _G.WackyBarsPlain.wbGlass == nil and _G.WackyBarsMouseHyper.wbGlass == nil)
+	click("Purple to pink")
+	click("Glass behind each bar")
+	local glass, Q = _G.WackyBarsPlain.wbGlass, _G.WackyBarsPlainQ
+	local g = glass and glass.__grad
+	check("Purple to pink + glass: each bar gets one panel, in the holder QuietHUD fades with its buttons, behind them",
+		glass and glass.__shown ~= false and glass.__parent == Q:GetParent() and glass.__layer == "BACKGROUND"
+		and _G.WackyBarsMouseHyper.wbGlass ~= nil and lookBtn.__text == "Purple to pink + glass" and DB.glass == true)
+	local p1, p2 = glass.__points[1], glass.__points[2]
+	check("... a little bigger than its bar (6 all round)", p1 and p2 and p1[1] == "TOPLEFT" and p1[2] == _G.WackyBarsPlain
+		and p1[4] == -6 and p1[5] == 6 and p2[1] == "BOTTOMRIGHT" and p2[4] == 6 and p2[5] == -6)
+	check("... dark and see-through: the look's two colours at a quarter, half see-through (#BD93F9 left, #FF79C6 right)", g
+		and g[1] == "HORIZONTAL" and math.abs(g[2].r - 0xBD / 255 * 0.25) < 0.001 and math.abs(g[3].b - 0xC6 / 255 * 0.25) < 0.001
+		and g[2].a == 0.5 and g[3].a == 0.5)
+	SlashCmdList.WACKYBARS("move")
+	local onFrame = glass.__parent == _G.WackyBarsPlain
+	SlashCmdList.WACKYBARS("move")
+	check("Move bars: the glass sits on the bar (full, under the arrows), back in its holder after", onFrame
+		and glass.__parent == Q:GetParent())
+	click("Nord")
+	g = glass.__grad
+	check("Nord + glass: the glass takes Nord's colours", g and math.abs(g[2].r - 0x88 / 255 * 0.25) < 0.001
+		and lookBtn.__text == "Nord + glass" and glass.__shown ~= false)
+	click("Default")
+	check("Default: the glass hides (the box is kept for a colour look), the label says Default", glass.__shown == false
+		and _G.WackyBarsMouseHyper.wbGlass.__shown == false and DB.glass == true and lookBtn.__text == "Default")
+	click("Gruvbox")
+	check("Gruvbox: the glass is back", glass.__shown == true and lookBtn.__text == "Gruvbox + glass")
+	click("Glass behind each bar")
+	check("glass unticked: hidden, the label says Gruvbox", glass.__shown == false and DB.glass == nil and lookBtn.__text == "Gruvbox")
+	click("Default")
+	rawset(_G, "MenuUtil", nil)
+end
+do -- 4: drifting colours. Off by default; a box in the Look list; a timer only while a bar shows above QuietHUD's Faded.
+	local lookBtn
+	for _, f in ipairs(M.frames) do
+		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+	end
+	local entries = {}
+	local root = {
+		CreateRadio = function(_, text, isSel, set) entries[#entries + 1] = { text = text, isSel = isSel, set = set } end,
+		CreateDivider = function() end,
+		CreateCheckbox = function(_, text, isSel, set)
+			local e = { text = text, isSel = isSel, set = set }
+			function e:SetEnabled(v) self.enabled = v end
+			entries[#entries + 1] = e
+			return e
+		end,
+	}
+	rawset(_G, "MenuUtil", { CreateContextMenu = function(owner, gen) wipe(entries) gen(owner, root) end })
+	local function click(name)
+		lookBtn.__scripts.OnClick(lookBtn)
+		for _, e in ipairs(entries) do if e.text:find(name, 1, true) == 1 then e.set() return e end end
+	end
+	local tickers = {}
+	rawset(C_Timer, "NewTicker", function(sec, fn)
+		local tk = { sec = sec, fn = fn }
+		function tk:Cancel() self.cancelled = true end
+		tickers[#tickers + 1] = tk
+		return tk
+	end)
+	local made, oldColor = 0, CreateColor
+	rawset(_G, "CreateColor", function(...) made = made + 1 return oldColor(...) end)
+	rawset(_G, "QuietHUDDB", { idle = 0.2 }) -- (QuietHUD's Global Faded)
+	local clock = 0
+	rawset(_G, "debugprofilestop", function() clock = clock + 0.05 return clock end)
+	-- Q's frame keeps a copy of what it was given (a tick reuses its two colours)
+	rawset(qTex, "SetGradient", function(s, o, c0, c1)
+		s.__grad = { o, { r = c0.r, g = c0.g, b = c0.b, a = c0.a }, { r = c1.r, g = c1.g, b = c1.b, a = c1.a } }
+	end)
+	lookBtn.__scripts.OnClick(lookBtn)
+	local box
+	for _, e in ipairs(entries) do if e.text == "Colours drift along the bars" then box = e end end
+	check("off by default: the Look list's last box, Colours drift along the bars, greyed with Default, no timer", box
+		and entries[#entries] == box and box.enabled() == false and not box.isSel() and #tickers == 0 and not DB.drift)
+	click("Purple to pink")
+	check("Purple to pink alone: no timer", #tickers == 0 and math.abs(qTex.__grad[2].r - 0xBD / 255) < 0.001)
+	click("Colours drift along the bars")
+	local tk = tickers[1]
+	check("ticked: one timer, 4 colour updates a second, the label says + drift", #tickers == 1 and tk and tk.sec == 0.25
+		and DB.drift == true and lookBtn.__text == "Purple to pink + drift")
+	local before = made
+	tk.fn()
+	local made1 = made - before
+	local r1 = qTex.__grad[2].r
+	tk.fn()
+	check("a tick slides Q's colours along the gradient (toward pink at the bar's left)", r1 > 0xBD / 255 + 0.001
+		and qTex.__grad[2].r > r1)
+	check("... and a tick makes no new colours after the first (no garbage)", made1 <= 2 and made - before == made1)
+	-- QuietHUD fades every bar to its Faded: the timer stops at the next tick; one bar back up starts it again
+	local ids = { "Plain", "Shift", "Ctrl", "Alt", "MousePlain", "MouseShift", "MouseCtrl", "MouseAlt", "MouseHyper" }
+	for _, id in ipairs(ids) do
+		for i = 1, 9 do _G["WackyBarsHold" .. id .. i]:SetAlpha(0.2) end
+	end
+	tk.fn()
+	check("every bar at QuietHUD's Faded: the timer is cancelled (nothing runs)", tk.cancelled == true and #tickers == 1)
+	local held = qTex.__grad[2].r
+	local home = _G.WackyBarsPlainQ:GetParent()
+	home:SetAlpha(0.6)
+	check("the keyboard's holder back above the Faded (QuietHUD shows it): a new timer", #tickers == 2 and not tickers[2].cancelled
+		and qTex.__grad[2].r == held)
+	for _, id in ipairs(ids) do
+		for i = 1, 9 do _G["WackyBarsHold" .. id .. i]:SetAlpha(1) end
+	end
+	SlashCmdList.WACKYBARS("drift")
+	local said = M.printed and M.printed[#M.printed] or ""
+	check("/wbars drift says what it costs: updates, ms each, ms a second", said:find("Drifting colours: 3 updates", 1, true)
+		and said:find("ms a second at 4 a second", 1, true) ~= nil)
+	click("Colours drift along the bars")
+	check("unticked: the timer stops, the colours stand still again (#BD93F9 at the bar's left)", tickers[2].cancelled == true
+		and DB.drift == nil and math.abs(qTex.__grad[2].r - 0xBD / 255) < 0.001 and lookBtn.__text == "Purple to pink")
+	click("Colours drift along the bars")
+	click("Default")
+	local last = tickers[#tickers]
+	check("Default with the box ticked: no timer, Q has Action Bar 1's dark again", last.cancelled == true and qTex.__grad == nil
+		and qTex.__vc[1] == 0.2 and DB.drift == true and lookBtn.__text == "Default")
+	DB.drift = nil
+	rawset(_G, "CreateColor", oldColor)
+	rawset(_G, "QuietHUDDB", nil)
+	rawset(_G, "MenuUtil", nil)
+end
+
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
 for _, e in ipairs(M.errors) do out(e) end
