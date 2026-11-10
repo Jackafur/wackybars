@@ -1538,6 +1538,23 @@ do
 	local ov = fs and fs.__parent
 	check("... in WackyBars' own frame on the row, at the icon's top right, like an action button's key", ov
 		and ov.__parent == mainA and fs.__points[#fs.__points][1] == "TOPRIGHT" and not ov.__scripts.OnUpdate)
+	do -- his "the ability you marked as swu is actually 1": a macro showing a spell's picture, earlier in the order, loses to
+		-- the slot holding the spell itself
+		local oldInfo = GetActionInfo
+		pics[sA], pics[sB] = 136500, 136500
+		rawset(_G, "GetActionInfo", function(slot)
+			if slot == sA then return "macro", 1 end
+			if slot == sB then return "spell", 172 end
+		end)
+		main[1]:SetTexture(136500)
+		M.flushTimers()
+		check("a macro showing a spell's picture loses to the slot with the spell itself (his sWU that is really 1)",
+			keyOn(main[1]) == "s" .. shiftB.wb.spot.label)
+		rawset(_G, "GetActionInfo", oldInfo)
+		pics[sA], pics[sB] = 136197, 136200
+		main[1]:SetTexture(136197)
+		M.flushTimers()
+	end
 	check("... Warlock HUD left as it is (its icons keep their places, its rows get no scripts)", #main[1].__points == pointsBefore
 		and next(mainA.__scripts) == nil and next(buffA.__scripts) == nil)
 	DB.keys[plain.wb.id] = "Z"

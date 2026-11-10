@@ -5,8 +5,8 @@
 -- How an icon finds its key: by its picture. A Warlock HUD icon shows the same picture as the action slot that holds its
 -- spell (every rank alike) or its item (the Healthstone); the key is the one that fires that slot: a WackyBars button's (the
 -- key you gave it in Edit keys too), with its modifier always in front (sQ, cQ, aQ, h1: on the HUD no bar says which), else
--- the key bound in Key Bindings to the game's bar button for that slot. One picture on several keys: the first in WackyBars'
--- order (the plain keyboard first).
+-- the key bound in Key Bindings to the game's bar button for that slot. One picture on several keys: a slot with the spell
+-- or item itself before a macro, then the first in WackyBars' order (the plain keyboard first).
 -- Warlock HUD is left as it is: WackyBars finds its rows through Warlock HUD's own WarlockHudAPI.GetDemoAnchors and puts one
 -- frame of its own on each row, over the icons, so the keys show, fade and move with the row. It only reads the icons (and
 -- follows when Warlock HUD changes one's picture or shows or hides it).
@@ -76,10 +76,19 @@ local function keysByPicture()
 			end
 		end
 	end
+	-- A slot holding the spell or item itself goes before a macro showing its picture (his "the ability you marked as swu is
+	-- actually 1", Nov 10 night: his Spam macro on Shift + wheel up shows Curse of Agony's picture and came first in the
+	-- order; Curse of Agony itself is on 1). Then the order above (the plain keyboard first).
 	local out = {}
-	for _, e in ipairs(list) do
-		local p = GetActionTexture(e[1])
-		if not secret(p) and p ~= nil and out[p] == nil and type(e[2]) == "string" and e[2] ~= "" then out[p] = e[2] end
+	for pass = 1, 2 do
+		for _, e in ipairs(list) do
+			local okKind, kind = pcall(GetActionInfo, e[1])
+			local isMacro = okKind and not secret(kind) and kind == "macro"
+			if (pass == 2) == isMacro then
+				local p = GetActionTexture(e[1])
+				if not secret(p) and p ~= nil and out[p] == nil and type(e[2]) == "string" and e[2] ~= "" then out[p] = e[2] end
+			end
+		end
 	end
 	return out
 end
