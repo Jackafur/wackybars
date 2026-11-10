@@ -655,11 +655,50 @@ local function pieOff(b, pet)
 	local fs, o = cd.GetCountdownFontString and cd:GetCountdownFontString(), cd.wbNumbers
 	if type(fs) == "table" and fs.SetTextColor and o and o[1] then fs:SetTextColor(o[1], o[2], o[3], o[4]) end
 end
+-- The proc glow (idea 9, picked with the presets, Nov 10 night): when Nightfall or another proc lights a button up, its glow
+-- takes the button's slice of the gradient instead of the game's yellow; Default keeps the yellow. On this client the button
+-- library draws that glow with LibButtonGlow (its own spell alert switch, Feat_UseVanillaOverlayGlow, is off): a glow frame
+-- of six yellow textures (spark, inner and outer glow, the ants), taken from a pool every addon using that library shares.
+-- So a glow WackyBars coloured gets the game's yellow back as soon as it goes to any other button, and on Default.
+local GLOW_PARTS = { "spark", "innerGlow", "innerGlowOver", "outerGlow", "outerGlowOver", "ants" }
+local function glowOn(b, bar, at)
+	local o = b.__LBGoverlay
+	if type(o) ~= "table" then return end
+	for _, key in ipairs(GLOW_PARTS) do gradOn(o[key], bar, at) end
+	o.wbTint = true
+end
+local function glowOff(o)
+	if type(o) ~= "table" or not o.wbTint then return end
+	o.wbTint = nil
+	for _, key in ipairs(GLOW_PARTS) do
+		local t = o[key]
+		if type(t) == "table" and t.SetVertexColor then
+			t:SetDesaturated(false)
+			t:SetVertexColor(1, 1, 1, 1)
+		end
+	end
+end
+-- After LibButtonGlow shows a glow (a proc lit a button): a WackyBars button's in the look's colours, any other's yellow.
+local function glowShown(frame)
+	local o = type(frame) == "table" and frame.__LBGoverlay
+	if not o then return end
+	local q = frame.wb
+	if q and q.bar and DB and DB.look == "gradient" then glowOn(frame, q.bar, frame) else glowOff(o) end
+end
+-- Hooked once all addons are in (the first look update), and again if a newer copy of the library loaded later replaced it.
+local glowFn
+local function hookGlow()
+	local LBG = LibStub and LibStub("LibButtonGlow-1.0", true)
+	if type(LBG) ~= "table" or type(LBG.ShowOverlayGlow) ~= "function" or LBG.ShowOverlayGlow == glowFn then return end
+	hooksecurefunc(LBG, "ShowOverlayGlow", glowShown)
+	glowFn = LBG.ShowOverlayGlow
+end
 -- b: a WackyBars button or a game pet button in a spot: its spot's bar, and its spot's slice (the pet button is scaled
 -- into its spot, so its own left and width are in other units; audit Nov 10).
 tint = function(b, bar)
 	if not (DB and DB.look == "gradient") then
 		pieOff(b, b.wbPetArt)
+		glowOff(b.__LBGoverlay)
 		return
 	end
 	bar = bar or (b.wb and b.wb.bar) or (b.wbSpot and b.wbSpot.wb.bar)
@@ -669,6 +708,7 @@ tint = function(b, bar)
 	gradOn(part(b, "PushedTexture"), bar, at) -- (the pressed frame too: each press flashed the plain one; audit Nov 10)
 	gradOn(part(b, "SlotArt"), bar, at)
 	pieOn(b, bar, at)
+	glowOn(b, bar, at) -- (a glow already showing)
 end
 -- A button's colour: Action Bar 1's on the frame, the pressed look and both slots; Purple to pink (tint) goes on top.
 local function colourOne(b, ref)
@@ -754,6 +794,7 @@ local function mapLook()
 	end
 end
 local function matchLook()
+	hookGlow()
 	mapLook()
 	local ref = _G.ActionButton1
 	if not ref then return end

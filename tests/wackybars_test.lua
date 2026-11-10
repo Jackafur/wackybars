@@ -873,6 +873,54 @@ do -- 2: the gradient cooldown pie. Default leaves the game's dark pie; Purple t
 	DB.look = nil
 	SlashCmdList.WACKYBARS("status")
 end
+do -- 9: the proc glow. LibButtonGlow as the library has it: glow frames of six textures, from a pool shared by every addon.
+	local LBG, pool = {}, {}
+	function LBG.ShowOverlayGlow(frame)
+		if rawget(frame, "__LBGoverlay") then return end
+		local o = table.remove(pool)
+		if not o then
+			o = {}
+			for _, k in ipairs({ "spark", "innerGlow", "innerGlowOver", "outerGlow", "outerGlowOver", "ants" }) do o[k] = tex() end
+		end
+		rawset(frame, "__LBGoverlay", o)
+	end
+	function LBG.HideOverlayGlow(frame)
+		local o = rawget(frame, "__LBGoverlay")
+		if o then pool[#pool + 1] = o; rawset(frame, "__LBGoverlay", nil) end
+	end
+	local oldStub = LibStub
+	rawset(_G, "LibStub", setmetatable({}, { __call = function(_, n, silent)
+		if n == "LibButtonGlow-1.0" then return LBG end
+		return oldStub(n, silent)
+	end }))
+	SlashCmdList.WACKYBARS("status") -- (a look update: the glow is hooked once the library is there)
+	local Q = _G.WackyBarsPlainQ
+	LBG.ShowOverlayGlow(Q)
+	local o = rawget(Q, "__LBGoverlay")
+	check("Default: a proc on Q shows the game's yellow glow, untouched", o and o.ants.__grad == nil and not o.ants.__desat)
+	DB.look = "gradient"
+	SlashCmdList.WACKYBARS("status")
+	check("Purple to pink: the glow already showing takes Q's slice, all six parts (#BD93F9 at the bar's left)",
+		o.ants.__grad and o.ants.__desat == true and o.outerGlow.__grad and o.spark.__grad
+		and math.abs(o.ants.__grad[2].r - 0xBD / 255) < 0.01 and o.ants.__grad[1] == "HORIZONTAL")
+	LBG.HideOverlayGlow(Q)
+	local other = M.newObj("CheckButton", "SomeOtherAddonButton") -- (another addon's button using the same library)
+	LBG.ShowOverlayGlow(other)
+	local o2 = rawget(other, "__LBGoverlay")
+	check("... that glow frame goes back to the shared pool: on another addon's button it is the game's yellow again",
+		o2 == o and o2.ants.__grad == nil and o2.ants.__desat == false and o2.ants.__vc and o2.ants.__vc[1] == 1
+		and o2.innerGlow.__vc and o2.innerGlow.__vc[3] == 1)
+	LBG.HideOverlayGlow(other)
+	LBG.ShowOverlayGlow(Q)
+	check("... a new proc on Q: its slice again", rawget(Q, "__LBGoverlay").ants.__grad ~= nil)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+	o = rawget(Q, "__LBGoverlay")
+	check("Default again: Q's glow is the game's yellow (white, not greyed)", o.ants.__grad == nil and o.ants.__desat == false
+		and o.ants.__vc[1] == 1 and o.ants.__vc[2] == 1 and o.ants.__vc[3] == 1)
+	LBG.HideOverlayGlow(Q)
+	rawset(_G, "LibStub", oldStub)
+end
 
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
