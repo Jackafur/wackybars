@@ -1141,6 +1141,112 @@ do
 	M.fire("PLAYER_REGEN_ENABLED")
 end
 
+-- Your keys on Warlock HUD's icons (WhudKeys.lua, his "just like a wackybar thing that overlays the keys their to"): each icon
+-- whose picture is on one of your keys shows that key; Warlock HUD itself is left as it is.
+do
+	local function listening(e)
+		for _, o in ipairs(M.frames) do if o.__events[e] and o.__scripts.OnEvent then return true end end
+		return false
+	end
+	check("Warlock HUD keys: nothing listened to until Warlock HUD is there at login", not listening("ACTIONBAR_SLOT_CHANGED"))
+	-- a plain keyboard button and a Shift keyboard button that show a slot, as they are now
+	local plain, shiftB
+	for _, v in ipairs(M.frames) do
+		if rawget(v, "wb") and v.__shown and v.wb.bar.frame.__shown and v.wb.def and select(1, v:GetAction()) == "action"
+			and DB.keys[v.wb.id] == nil then
+			if v.wb.bar.id == "Plain" and not plain then plain = v end
+			if v.wb.bar.id == "Shift" and not shiftB then shiftB = v end
+		end
+	end
+	local sA, sB = select(2, plain:GetAction()), select(2, shiftB:GetAction())
+	local pics = { [sA] = 136197, [sB] = 136200, [45] = 136300 } -- (45: Action Bar 5 button 9, on Caps Lock, no WackyBars spot)
+	rawset(_G, "GetActionTexture", function(slot) return pics[slot] end)
+	local function icon(parent, x, pic)
+		local t = M.newObj("Texture", nil, parent)
+		rawset(t, "__pic", pic)
+		rawset(t, "GetObjectType", function() return "Texture" end)
+		rawset(t, "GetTextureFileID", function(s) return s.__pic end)
+		rawset(t, "SetTexture", function(s, p) rawset(s, "__pic", p) end)
+		t.__points = { { "CENTER", parent, "CENTER", x, 0 } }
+		return t
+	end
+	local function row(list, holder)
+		local a = M.newObj("Frame")
+		local regions = {}
+		local on = a
+		if holder then
+			on = M.newObj("Frame", nil, a)
+			rawset(on, "GetRegions", function() return unpack(regions) end)
+			rawset(a, "GetRegions", function() end)
+		else
+			rawset(a, "GetRegions", function() return unpack(regions) end)
+		end
+		for i, pic in ipairs(list) do regions[i] = icon(on, i * 40, pic) end
+		rawset(a, "GetChildren", function(s)
+			local out = {}
+			for _, o in ipairs(M.frames) do if o.__parent == s and o.__kind == "Frame" then out[#out + 1] = o end end
+			return unpack(out)
+		end)
+		return a, regions
+	end
+	local mainA, main = row({ 136197, 999 })
+	local utilA, util = row({ 136200 })
+	local buffA, buff = row({ 136300 }, true)
+	local rebuilt = false
+	local main2A, main2 = row({ 136200, 136197 })
+	rawset(_G, "WarlockHudAPI", {
+		GetDemoAnchors = function()
+			if rebuilt then return { main = main2A, utility = utilA, buffs = buffA } end
+			return { main = mainA, utility = utilA, buffs = buffA }
+		end,
+		Rebuild = function() rebuilt = true return true end,
+	})
+	local function keyOn(t)
+		for _, o in ipairs(M.frames) do
+			local p = o.__kind == "CreateFontString" and o.__points[#o.__points]
+			if p and p[2] == t and o.__shown then return o.__text, o end
+		end
+	end
+	local pointsBefore = #main[1].__points
+	M.fire("PLAYER_LOGIN")
+	M.flushTimers()
+	local plainKey = plain.wb.spot.label
+	check(("Warlock HUD's icons show the key: %s (plain keyboard), s%s (Shift keyboard, its modifier shown)"):format(plainKey,
+		shiftB.wb.spot.label), keyOn(main[1]) == plainKey and keyOn(util[1]) == "s" .. shiftB.wb.spot.label)
+	check("... a key bound to a game bar button that is no WackyBars spot: the game's key text", keyOn(buff[1]) == "CAPSLOCK")
+	check("... an icon whose picture is on no key shows none", keyOn(main[2]) == nil)
+	local _, fs = keyOn(main[1])
+	local ov = fs and fs.__parent
+	check("... in WackyBars' own frame on the row, at the icon's top right, like an action button's key", ov
+		and ov.__parent == mainA and fs.__points[#fs.__points][1] == "TOPRIGHT" and not ov.__scripts.OnUpdate)
+	check("... Warlock HUD left as it is (its icons keep their places, its rows get no scripts)", #main[1].__points == pointsBefore
+		and next(mainA.__scripts) == nil and next(buffA.__scripts) == nil)
+	DB.keys[plain.wb.id] = "Z"
+	SlashCmdList.WACKYBARS("status")
+	M.flushTimers()
+	check("a key changed in Edit keys: the icon shows the new key", keyOn(main[1]) == "Z")
+	DB.keys[plain.wb.id] = nil
+	SlashCmdList.WACKYBARS("status")
+	M.flushTimers()
+	main[2]:SetTexture(136200)
+	M.flushTimers()
+	check("Warlock HUD changes an icon's picture: its key follows", keyOn(main[2]) == "s" .. shiftB.wb.spot.label)
+	main[1]:Hide()
+	check("Warlock HUD hides an icon: its key hides too", keyOn(main[1]) == nil)
+	main[1]:Show()
+	check("... and shows again with it", keyOn(main[1]) == plainKey)
+	WarlockHudAPI.Rebuild()
+	M.flushTimers()
+	check("Warlock HUD rebuilds its rows: the keys go onto the new icons", keyOn(main2[1]) == "s" .. shiftB.wb.spot.label
+		and keyOn(main2[2]) == plainKey and fs.__parent.__parent == main2A)
+	M.fire("UPDATE_BINDINGS")
+	M.fire("ACTIONBAR_SLOT_CHANGED", 1)
+	M.fire("ACTIONBAR_SLOT_CHANGED", 2)
+	check("bindings or slots changing: worked out again once, a frame later", #M.timers == 1)
+	M.flushTimers()
+	rawset(_G, "WarlockHudAPI", nil)
+end
+
 objMt.__index = baseIndex -- (the fake game as it was)
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
