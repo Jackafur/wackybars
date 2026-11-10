@@ -631,9 +631,15 @@ check("Purple to pink: Q's frame gets its slice of the bar's gradient (#BD93F9 a
 DB.look = nil
 SlashCmdList.WACKYBARS("status")
 check("Default: Q copies Action Bar 1's dark tint again", qTex.__grad == nil and qTex.__vc and qTex.__vc[1] == 0.2)
+-- His Action Bar 1 (readout Nov 10): button 45, icon 45, frame 51. WackyBars' frame keeps the game's own proportions
+-- around its icon instead: 46 by 45, pinned at the icon's top left.
+refTex.__w, refTex.__h = 51, 51
+_G.WackyBarsPlainQ.icon.__w, _G.WackyBarsPlainQ.icon.__h = 45, 45
+SlashCmdList.WACKYBARS("status")
 local qp = qTex.__points[#qTex.__points]
-check("Q's frame sits centred on the button, as Action Bar 1's (not pinned at a corner: the icons looked small)", qp
-	and qp[1] == "CENTER" and qp[2] == _G.WackyBarsPlainQ and qp[3] == "CENTER")
+check(("Q's frame: the game's proportions on its icon (46 x 45 at its top left), not Action Bar 1's 51 (%s x %s)"):format(
+	tostring(qTex.__w), tostring(qTex.__h)), qp and qp[1] == "TOPLEFT" and qp[2] == _G.WackyBarsPlainQ.icon
+	and math.abs(qTex.__w - 46) < 0.01 and math.abs(qTex.__h - 45) < 0.01)
 check("Default: the minimap ring has BetterBlizzFrames' latest dark back", ring.__grad == nil and ring.__vc[1] == 0.3)
 check("Default: the arrows plain grey again", arrowT.__grad == nil and arrowT.__vc == 1)
 check("arrows at 30% by default", math.abs(arrowT.__alpha - 0.3) < 0.01)

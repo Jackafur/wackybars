@@ -449,25 +449,24 @@ tint = function(b, bar)
 	gradOn(b:GetNormalTexture(), bar, b)
 	gradOn(b.SlotArt, bar, b)
 end
--- The frame copied from Action Bar 1 is bigger than the button (51 on 45 with his setup, Nov 10) and sits centred over the
--- icon there; pinned at one corner, as the library leaves it, it hung 6 pixels off the right and bottom and the icon looked
--- small and pushed to the top left (his "the spell icons dont fit"). So it goes where Action Bar 1's is: centred, with the
--- same offset from the middle (none when that can't be read).
-local function placeLike(dst, src, b, ref, fx, fy)
-	if type(dst) ~= "table" or not (dst.ClearAllPoints and dst.SetPoint) then return end
-	local ox, oy = 0, 0
-	if type(src) == "table" and src.GetCenter and ref.GetCenter then
-		local sx, sy = src:GetCenter()
-		local rx, ry = ref:GetCenter()
-		if sx and sy and rx and ry and math.abs(sx - rx) < 10 and math.abs(sy - ry) < 10 then ox, oy = sx - rx, sy - ry end
-	end
+-- The frame around the icon: the game's own proportions (ActionButtonTemplate: 46 by 45 on a 45 icon, pinned at the icon's
+-- top left), whatever size Action Bar 1's has. His Action Bar 1 has a 51 frame on a 45 icon (his readout, Nov 10), so a
+-- copied size sat loose and the icons looked small ("the spell icons dont fit"); copying its place too only moved the gap.
+-- The art and colour still come from Action Bar 1.
+local function placeLike(dst, src, b)
+	if type(dst) ~= "table" or not (dst.ClearAllPoints and dst.SetPoint and dst.SetSize) then return end
+	local mine = (type(b.icon) == "table" and b.icon.GetWidth) and b.icon or b
+	local w, h = mine:GetWidth(), mine:GetHeight()
+	if type(w) ~= "number" or type(h) ~= "number" or w <= 0 or h <= 0 then w, h = b:GetWidth(), b:GetHeight() end
 	dst:ClearAllPoints()
-	dst:SetPoint("CENTER", b, "CENTER", ox * fx, oy * fy)
+	dst:SetPoint("TOPLEFT", mine, "TOPLEFT", 0, 0)
+	dst:SetSize(w * 46 / 45, h)
 end
 local function lookOne(b, ref, rw, rh)
 	do
 		local fx = (rw and rw > 0) and (b:GetWidth() / rw) or 1
 		local fy = (rh and rh > 0) and (b:GetHeight() / rh) or 1
+
 		if ref.SlotArt and b.SlotArt then
 			b.SlotArt:SetShown(ref.SlotArt:IsShown())
 			copyTexture(b.SlotArt, ref.SlotArt, function(a) b.SlotArt:SetAtlas(a) end, fx, fy)
@@ -478,8 +477,8 @@ local function lookOne(b, ref, rw, rh)
 		end
 		copyTexture(b:GetNormalTexture(), ref:GetNormalTexture(), function(a) b:SetNormalAtlas(a) end, fx, fy)
 		copyTexture(b:GetPushedTexture(), ref:GetPushedTexture(), function(a) b:SetPushedAtlas(a) end, fx, fy)
-		placeLike(b:GetNormalTexture(), ref:GetNormalTexture(), b, ref, fx, fy)
-		placeLike(b:GetPushedTexture(), ref:GetPushedTexture(), b, ref, fx, fy)
+		placeLike(b:GetNormalTexture(), ref:GetNormalTexture(), b)
+		placeLike(b:GetPushedTexture(), ref:GetPushedTexture(), b)
 	end
 	tint(b)
 end
