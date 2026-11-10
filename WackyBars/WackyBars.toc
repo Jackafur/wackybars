@@ -13,3 +13,4 @@ libs\LibActionButton-1.0\LibActionButton-1.0.lua
 WackyBars.lua
 Ding.lua
 Profiles.lua
+Panic.lua

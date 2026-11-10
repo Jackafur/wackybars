@@ -1010,6 +1010,137 @@ do
 	SlashCmdList.WACKYBARS("status")
 end
 
+-- Panic flash (Panic.lua, his "not a bad idea either"): in a fight, under 30% health, the buttons holding an escape spell (by
+-- name, any rank), a Healthstone or a healing potion pulse; the game sets their opacity from a step curve over your health
+-- (hidden from addons); one box in /wbars switches it off.
+do
+	local hp = 1
+	local curves = {}
+	rawset(_G, "C_CurveUtil", { CreateCurve = function()
+		local c = { points = {} }
+		function c:SetType(t) self.type = t end
+		function c:ClearPoints() self.points = {} end
+		function c:AddPoint(x, y) self.points[#self.points + 1] = { x, y } end
+		curves[#curves + 1] = c
+		return c
+	end })
+	Enum.LuaCurveType = { Step = "Step" }
+	rawset(_G, "UnitHealthPercent", function(unit, _, c) -- (a step curve: the value of the last point at or left of your health)
+		if unit ~= "player" or not c then return hp end
+		local v
+		for _, p in ipairs(c.points) do if p[1] <= hp + 1e-9 then v = p[2] end end
+		return v
+	end)
+	local info, spells, items, macros = {}, { [17926] = "Death Coil", [686] = "Shadow Bolt", [17928] = "Howl of Terror" }, {}, { [3] = 17928 }
+	rawset(_G, "GetActionInfo", function(slot) local i = info[slot] if i then return i[1], i[2], i[3] end end)
+	C_Spell.GetSpellName = function(id) return spells[id] end
+	C_Item.GetItemNameByID = function(id) return items[id] end
+	rawset(_G, "GetMacroSpell", function(id) return macros[id] end)
+	-- four shown buttons with a slot of their own: Death Coil (a rank's id), a Healthstone, Shadow Bolt, a macro casting Howl
+	-- of Terror
+	local picked, seen = {}, {}
+	for _, v in ipairs(M.frames) do
+		if rawget(v, "wb") and v.__shown and v.wb.bar.frame.__shown and #picked < 4 then
+			local kind, slot = v:GetAction()
+			if kind == "action" and type(slot) == "number" and not seen[slot] then
+				seen[slot] = true
+				picked[#picked + 1] = v
+			end
+		end
+	end
+	local A, B, C, D = picked[1], picked[2], picked[3], picked[4]
+	local function slotOf(b) return select(2, b:GetAction()) end
+	info[slotOf(A)], info[slotOf(B)], info[slotOf(C)], info[slotOf(D)] = { "spell", 17926 }, { "item", 5510 }, { "spell", 686 },
+		{ "macro", 3 }
+	local function pulse(b)
+		for _, o in ipairs(M.frames) do
+			if o.__kind == "Frame" and o.__parent == b then
+				for _, t in ipairs(M.frames) do
+					if t.__kind == "CreateTexture" and t.__parent == o and t.__atlas == "UI-HUD-ActionBar-IconFrame-Mouseover" then
+						return o, t, groupOf(t)
+					end
+				end
+			end
+		end
+	end
+	local function pulsing(b)
+		local gate, _, g = pulse(b)
+		return gate and gate.__shown and g and g.__playing and true or false
+	end
+	local function listening(e)
+		for _, o in ipairs(M.frames) do if o.__events[e] and o.__scripts.OnEvent then return true end end
+		return false
+	end
+	check("Panic: four buttons to try it on", D ~= nil)
+	check("... out of a fight nothing pulses and your health is not listened to", not pulse(A) and not listening("UNIT_HEALTH"))
+	combat = true
+	M.fire("PLAYER_REGEN_DISABLED")
+	check("a fight: Death Coil (by name, any rank) and the Howl of Terror macro pulse, Shadow Bolt doesn't",
+		pulsing(A) and pulsing(D) and not pulsing(C))
+	check("... the Healthstone's name not loaded yet: it waits for the game's item info", not pulsing(B)
+		and listening("GET_ITEM_INFO_RECEIVED"))
+	items[5510] = "Major Healthstone"
+	M.fire("GET_ITEM_INFO_RECEIVED", 5510, true)
+	M.flushTimers()
+	check("... and pulses once the game has it (then stops waiting)", pulsing(B) and not listening("GET_ITEM_INFO_RECEIVED"))
+	local gate, tex, g = pulse(A)
+	check("... the game's spell highlight, looping 0.35 s up and down at half strength, tinted with the bar's gradient",
+		tex.__blend == "ADD" and g.__loop == "REPEAT" and g.__anims[1].__to == 0.5 and g.__anims[1].__dur == 0.35
+		and g.__anims[2].__to == 0 and tex.__grad and tex.__desat == true)
+	check("... on the button, so it fades with its bar (QuietHUD's row)", gate.__parent == A)
+	local c = curves[#curves]
+	check("... a step curve over your health: 1 under 30%, 0 from 30% up", c and c.type == "Step" and #c.points == 4
+		and c.points[2][2] == 1 and c.points[3][1] == 0.3 and c.points[3][2] == 0)
+	hp = 0.8
+	M.fire("UNIT_HEALTH", "player")
+	local high = gate.__alpha
+	hp = 0.25
+	M.fire("UNIT_HEALTH", "player")
+	check("... health 80%: hidden; 25%: shown (the game's number, never read here)", high == 0 and gate.__alpha == 1
+		and select(1, pulse(D)).__alpha == 1)
+	M.fire("UNIT_HEALTH", "target")
+	check("... another unit's health changes nothing", gate.__alpha == 1)
+	info[slotOf(A)] = { "spell", 686 }
+	local before = #M.timers
+	M.fire("UPDATE_BONUS_ACTIONBAR")
+	M.fire("ACTIONBAR_SLOT_CHANGED", slotOf(A))
+	check("a page or slot change in a fight: read again once, a frame later", #M.timers == before + 1)
+	M.flushTimers()
+	check("... Death Coil's button now holds Shadow Bolt: it stops", not pulsing(A) and pulsing(D))
+	combat = false
+	M.fire("PLAYER_REGEN_ENABLED")
+	check("the fight ends: every pulse stops, your health is not listened to", not pulsing(B) and not pulsing(D)
+		and not listening("UNIT_HEALTH") and not listening("UPDATE_BONUS_ACTIONBAR"))
+	local noUpdate = true
+	for _, b in ipairs({ A, B, C, D }) do
+		local gt, t = pulse(b)
+		if (gt and gt.__scripts.OnUpdate) or (t and t.__scripts.OnUpdate) then noUpdate = false end
+	end
+	check("... no OnUpdate on any pulse (the game's animations), no timer left", noUpdate and #M.timers == 0)
+	info[slotOf(A)] = { "spell", 17926 }
+	local opts = _G.WackyBarsOptions
+	if not opts.__shown then SlashCmdList.WACKYBARS("") end
+	local box
+	for _, o in ipairs(M.frames) do
+		if o.__parent == opts and o.__text == "Panic flash (escape spells pulse under 30% health)" then box = o.__points[1][2] end
+	end
+	box.__scripts.OnClick(box)
+	combat = true
+	M.fire("PLAYER_REGEN_DISABLED")
+	check("the box in /wbars unticked: a fight pulses nothing, health not listened to", DB.noPanic == true
+		and not pulsing(A) and not listening("UNIT_HEALTH"))
+	combat = false
+	M.fire("PLAYER_REGEN_ENABLED")
+	SlashCmdList.WACKYBARS("")
+	if not opts.__shown then SlashCmdList.WACKYBARS("") end
+	box.__scripts.OnClick(box)
+	combat = true
+	M.fire("PLAYER_REGEN_DISABLED")
+	check("... ticked again: it pulses in the next fight", DB.noPanic == nil and pulsing(A))
+	combat = false
+	M.fire("PLAYER_REGEN_ENABLED")
+end
+
 objMt.__index = baseIndex -- (the fake game as it was)
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
