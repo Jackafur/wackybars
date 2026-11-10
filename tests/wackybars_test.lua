@@ -998,9 +998,10 @@ do -- 3: glass. A box in the Look list for every colour look: one dark see-throu
 		for _, e in ipairs(entries) do if e.text:find(name, 1, true) == 1 then e.set() return e end end
 	end
 	lookBtn.__scripts.OnClick(lookBtn)
-	local box = entries[#entries]
-	check("the Look list ends with one box, Glass behind each bar, greyed while Default is picked", box and box.box
-		and box.text == "Glass behind each bar" and type(box.enabled) == "function" and box.enabled() == false and not box.isSel())
+	local box
+	for _, e in ipairs(entries) do if e.text == "Glass behind each bar" then box = e end end
+	check("the Look list has a box, Glass behind each bar, after the looks, greyed while Default is picked", box and box.box
+		and entries[7] == box and type(box.enabled) == "function" and box.enabled() == false and not box.isSel())
 	check("Default: no glass is made", _G.WackyBarsPlain.wbGlass == nil and _G.WackyBarsMouseHyper.wbGlass == nil)
 	click("Purple to pink")
 	click("Glass behind each bar")
@@ -1032,6 +1033,94 @@ do -- 3: glass. A box in the Look list for every colour look: one dark see-throu
 	click("Glass behind each bar")
 	check("glass unticked: hidden, the label says Gruvbox", glass.__shown == false and DB.glass == nil and lookBtn.__text == "Gruvbox")
 	click("Default")
+	rawset(_G, "MenuUtil", nil)
+end
+do -- 4: drifting colours. Off by default; a box in the Look list; a timer only while a bar shows above QuietHUD's Faded.
+	local lookBtn
+	for _, f in ipairs(M.frames) do
+		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+	end
+	local entries = {}
+	local root = {
+		CreateRadio = function(_, text, isSel, set) entries[#entries + 1] = { text = text, isSel = isSel, set = set } end,
+		CreateDivider = function() end,
+		CreateCheckbox = function(_, text, isSel, set)
+			local e = { text = text, isSel = isSel, set = set }
+			function e:SetEnabled(v) self.enabled = v end
+			entries[#entries + 1] = e
+			return e
+		end,
+	}
+	rawset(_G, "MenuUtil", { CreateContextMenu = function(owner, gen) wipe(entries) gen(owner, root) end })
+	local function click(name)
+		lookBtn.__scripts.OnClick(lookBtn)
+		for _, e in ipairs(entries) do if e.text:find(name, 1, true) == 1 then e.set() return e end end
+	end
+	local tickers = {}
+	rawset(C_Timer, "NewTicker", function(sec, fn)
+		local tk = { sec = sec, fn = fn }
+		function tk:Cancel() self.cancelled = true end
+		tickers[#tickers + 1] = tk
+		return tk
+	end)
+	local made, oldColor = 0, CreateColor
+	rawset(_G, "CreateColor", function(...) made = made + 1 return oldColor(...) end)
+	rawset(_G, "QuietHUDDB", { idle = 0.2 }) -- (QuietHUD's Global Faded)
+	local clock = 0
+	rawset(_G, "debugprofilestop", function() clock = clock + 0.05 return clock end)
+	-- Q's frame keeps a copy of what it was given (a tick reuses its two colours)
+	rawset(qTex, "SetGradient", function(s, o, c0, c1)
+		s.__grad = { o, { r = c0.r, g = c0.g, b = c0.b, a = c0.a }, { r = c1.r, g = c1.g, b = c1.b, a = c1.a } }
+	end)
+	lookBtn.__scripts.OnClick(lookBtn)
+	local box
+	for _, e in ipairs(entries) do if e.text == "Colours drift along the bars" then box = e end end
+	check("off by default: the Look list's last box, Colours drift along the bars, greyed with Default, no timer", box
+		and entries[#entries] == box and box.enabled() == false and not box.isSel() and #tickers == 0 and not DB.drift)
+	click("Purple to pink")
+	check("Purple to pink alone: no timer", #tickers == 0 and math.abs(qTex.__grad[2].r - 0xBD / 255) < 0.001)
+	click("Colours drift along the bars")
+	local tk = tickers[1]
+	check("ticked: one timer, 4 colour updates a second, the label says + drift", #tickers == 1 and tk and tk.sec == 0.25
+		and DB.drift == true and lookBtn.__text == "Purple to pink + drift")
+	local before = made
+	tk.fn()
+	local made1 = made - before
+	local r1 = qTex.__grad[2].r
+	tk.fn()
+	check("a tick slides Q's colours along the gradient (toward pink at the bar's left)", r1 > 0xBD / 255 + 0.001
+		and qTex.__grad[2].r > r1)
+	check("... and a tick makes no new colours after the first (no garbage)", made1 <= 2 and made - before == made1)
+	-- QuietHUD fades every bar to its Faded: the timer stops at the next tick; one bar back up starts it again
+	local ids = { "Plain", "Shift", "Ctrl", "Alt", "MousePlain", "MouseShift", "MouseCtrl", "MouseAlt", "MouseHyper" }
+	for _, id in ipairs(ids) do
+		for i = 1, 9 do _G["WackyBarsHold" .. id .. i]:SetAlpha(0.2) end
+	end
+	tk.fn()
+	check("every bar at QuietHUD's Faded: the timer is cancelled (nothing runs)", tk.cancelled == true and #tickers == 1)
+	local held = qTex.__grad[2].r
+	local home = _G.WackyBarsPlainQ:GetParent()
+	home:SetAlpha(0.6)
+	check("the keyboard's holder back above the Faded (QuietHUD shows it): a new timer", #tickers == 2 and not tickers[2].cancelled
+		and qTex.__grad[2].r == held)
+	for _, id in ipairs(ids) do
+		for i = 1, 9 do _G["WackyBarsHold" .. id .. i]:SetAlpha(1) end
+	end
+	SlashCmdList.WACKYBARS("drift")
+	local said = M.printed and M.printed[#M.printed] or ""
+	check("/wbars drift says what it costs: updates, ms each, ms a second", said:find("Drifting colours: 3 updates", 1, true)
+		and said:find("ms a second at 4 a second", 1, true) ~= nil)
+	click("Colours drift along the bars")
+	check("unticked: the timer stops, the colours stand still again (#BD93F9 at the bar's left)", tickers[2].cancelled == true
+		and DB.drift == nil and math.abs(qTex.__grad[2].r - 0xBD / 255) < 0.001 and lookBtn.__text == "Purple to pink")
+	click("Colours drift along the bars")
+	click("Default")
+	local last = tickers[#tickers]
+	check("Default with the box ticked: no timer, Q has Action Bar 1's dark again", last.cancelled == true and qTex.__grad == nil
+		and qTex.__vc[1] == 0.2 and DB.drift == true and lookBtn.__text == "Default")
+	DB.drift = nil
+	rawset(_G, "CreateColor", oldColor)
+	rawset(_G, "QuietHUDDB", nil)
 	rawset(_G, "MenuUtil", nil)
 end
 
