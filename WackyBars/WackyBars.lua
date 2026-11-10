@@ -867,7 +867,7 @@ end
 -- QuietHUDDB.idle, which every bar fades to; 0 without QuietHUD). When none is, the timer is cancelled; a hook on the bars'
 -- holders (what QuietHUD fades) or the bars coming back on screen starts it again. A tick reuses two colours, so it makes
 -- no garbage, and times itself: /wbars drift says what it costs (he measures it before keeping it on).
-local DRIFT_HZ, DRIFT_ROUND = 4, 24
+local DRIFT_HZ, DRIFT_ROUND = 4, 8 -- (8 seconds there and back: at 24 he saw nothing, "it might be too subtle", Nov 10 night)
 local driftTicker, driftHooked, cA, cB
 local driftCost = { n = 0, ms = 0, worst = 0 }
 local function driftWanted() return (lookOf() and DB.drift and CreateColor) and true or false end
