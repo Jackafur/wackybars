@@ -7,9 +7,11 @@
 -- saved key bindings (no SetBinding, no SaveBindings): the only keys it touches are override bindings, which the game
 -- forgets the moment WackyBars is off. It adds them only for a key you change in quick edit, and for a free key (nothing
 -- bound) that it gives a spare slot. A key you did not touch keeps going through the game's own bar button, so stealth,
--- vehicles and paging work as they always did, with that bar hidden. Fading, mouse over, fights and low health are
--- QuietHUD's job: "WackyBars" is in its bars list, each bar in its mouse over list, and the Hypershift bar is with Action
--- Bar 8 (your items: QuietHUD's Low health brings them up).
+-- vehicles and paging work as they always did, with that bar hidden. Fading, mouse over, fights, low health and click
+-- through are QuietHUD's job: each bar sits in a holder frame of the game bar it follows (sortForQuietHUD), and QuietHUD
+-- treats that holder like the game bar's own buttons. Input: a key you did not touch fires the game's own button, exactly as
+-- without WackyBars; a key WackyBars binds presses its button the same way Bartender's do, on key down. Nothing is added in
+-- between.
 local ADDON = ...
 -- The buttons are Bartender4's (LibActionButton-1.0, in libs\): their secure state lives in attributes, so nothing the
 -- game reads before a protected action is written by WackyBars' own code. The game's ActionBarButtonTemplate, used until
@@ -38,7 +40,8 @@ local LAYERS = {
 	{ id = "Ctrl", mod = "CTRL-", short = "c" },
 	{ id = "Alt", mod = "ALT-", short = "a", follow = 1 },
 }
--- follow: the game bar whose row on QuietHUD's Action bars page these bars always follow (the Alt ones: Action Bar 1, his ask
+-- follow: the game bar whose row on QuietHUD's Action bars page these bars always follow (the Alt keyboard: Action Bar 1; the
+-- Alt mouse goes with the plain mouse bar, set where the bars are made; his asks
 -- Nov 10), whatever their keys are bound to.
 
 -- A spot: key, name (for frame names and ids), label (shown when the key is its own), x (straight rows), sx (the keyboard's
@@ -144,7 +147,7 @@ end
 local buttons, byCmd, wbBars = {}, {}, {}
 local pending, applying, editing, moving, signature = false, false, false, false, nil
 
--- One frame holds every bar, as big as the screen, never takes the mouse: QuietHUD sets its opacity.
+-- One frame holds every bar, as big as the screen, never takes the mouse (QuietHUD fades the holders inside the bars).
 local container = CreateFrame("Frame", "WackyBars", UIParent)
 container:SetAllPoints(UIParent)
 container:EnableMouse(false)
@@ -201,7 +204,7 @@ local function pointArrow(t, dir)
 end
 for si, set in ipairs(SETS) do
 	for li, L in ipairs(set.plainOnly and { LAYERS[1] } or LAYERS) do
-		local bar = { id = set.id .. (set.plainOnly and "" or L.id), name = set.name .. (L.mod == "" and "" or (" " .. L.id)), set = set, setIndex = si,
+		local bar = { id = set.id .. (set.plainOnly and "" or L.id), name = set.name .. (L.mod == "" and "" or (" " .. L.id)), set = set,
 			layerIndex = li, short = set.short or L.short, arrows = {}, buttons = {},
 			-- (the Alt mouse bar goes with the plain mouse bar: his pick, Nov 10)
 			follow = (L.id == "Alt" and set.id == "Mouse") and "MousePlain" or L.follow }
@@ -223,6 +226,9 @@ for si, set in ipairs(SETS) do
 			if not S.only or S.only[L.id] then
 				local b = LAB:CreateButton(#buttons + 1, "WackyBars" .. bar.id .. S.name, pager, BUTTON_CONFIG)
 				b:SetParent(f)
+				-- (Bartender's key binding mode, when Bartender is on too, would write saved key bindings through these:
+				-- WackyBars never does; audit Nov 10)
+				b.SetKey, b.ClearBindings = function() end, function() end
 				-- (the game's own buttons honour self cast, focus cast and Mouseover Cast through these; the library sets none:
 				-- without them a click or a WackyBars key ignored his Mouseover Cast; Codex audit Nov 10)
 				b:SetAttribute("checkselfcast", true)
@@ -269,7 +275,7 @@ local function parse(cmd)
 end
 
 -- The key a button answers to now: the one you gave it in quick edit, none if you cleared it, else its own spot's key
--- (none for a spot whose key does something else, like Caps opening LockMenu: that key is left alone).
+-- (none for a spot whose key does something else, like a key bound to a non-bar command: that key is left alone).
 local function effKey(b)
 	if not active(b) then return nil end
 	local e = DB.keys[b.wb.id]
@@ -400,11 +406,8 @@ local function copyTexture(dst, src, setAtlas, fx, fy)
 	if dst.SetDesaturated and src.IsDesaturated then dst:SetDesaturated(src:IsDesaturated()) end
 	if dst.SetVertexColor and src.GetVertexColor then dst:SetVertexColor(src:GetVertexColor()) end
 end
-local function matchLook()
-	local ref = _G.ActionButton1
-	if not ref then return end
-	local rw, rh = ref:GetWidth(), ref:GetHeight()
-	for _, b in ipairs(buttons) do
+local function lookOne(b, ref, rw, rh)
+	do
 		local fx = (rw and rw > 0) and (b:GetWidth() / rw) or 1
 		local fy = (rh and rh > 0) and (b:GetHeight() / rh) or 1
 		if ref.SlotArt and b.SlotArt then
@@ -418,6 +421,12 @@ local function matchLook()
 		copyTexture(b:GetNormalTexture(), ref:GetNormalTexture(), function(a) b:SetNormalAtlas(a) end, fx, fy)
 		copyTexture(b:GetPushedTexture(), ref:GetPushedTexture(), function(a) b:SetPushedAtlas(a) end, fx, fy)
 	end
+end
+local function matchLook()
+	local ref = _G.ActionButton1
+	if not ref then return end
+	local rw, rh = ref:GetWidth(), ref:GetHeight()
+	for _, b in ipairs(buttons) do lookOne(b, ref, rw, rh) end
 end
 local lookQueued = false
 local function queueLook()
@@ -480,9 +489,14 @@ local function widen(b, w, h, size)
 	end
 end
 -- (after the library updates a button it has reset the glow and highlight sizes: WackyBars' own sizes go back on)
+-- (also Action Bar 1's art, which the library swaps for its own on each update; audit Nov 10. Only shown buttons: the
+-- library updates all of them at a loading screen or a vehicle, most on bars that are off)
 LAB.RegisterCallback(buttons, "OnButtonUpdate", function(_, b)
-	local wd = b and b.wbWiden
+	if not (b and b.wb and b:IsShown()) then return end
+	local wd = b.wbWiden
 	if wd then widen(b, wd[1], wd[2], wd[3]) end
+	local ref = _G.ActionButton1
+	if ref then lookOne(b, ref, ref:GetWidth(), ref:GetHeight()) end
 	-- (a hidden button shows faint while you edit keys; the library's update set it back to full)
 	if editing and b.wb and DB and DB.hidden[b.wb.id] then b:SetAlpha(0.35) end
 end)
@@ -501,7 +515,7 @@ local function layout()
 	for _, bar in ipairs(wbBars) do
 		local minX, maxX, minRow, maxRow = math.huge, -math.huge, math.huge, 0
 		for _, S in ipairs(bar.set.spots) do
-			if not spotGone(S) then
+			if not spotGone(S) and (not S.only or S.only[LAYERS[bar.layerIndex].id]) then
 				minX = math.min(minX, spotX(bar, S))
 				maxX = math.max(maxX, spotX(bar, S) + (S.wide or 1) - 1)
 				minRow, maxRow = math.min(minRow, S.row), math.max(maxRow, S.row)
@@ -602,7 +616,8 @@ end
 -- bar (its row on the Action bars page: Fade, Mouse over, Low health, Low mana, Hide hotkeys, Hide names; his ask, Nov 10).
 -- One bar, one row: per button, a key bound to another game bar (Shift + wheel click) stayed shown while the rest of its
 -- bar faded on mouse over (his "shifts mmb stays out when its bars is mouseover", Nov 10). No slot shown at all: its home
--- (Hypershift: Action Bar 8) or Action Bar 1. The Alt bars always follow Action Bar 1 (LAYERS). Out of a fight only (apply).
+-- (Hypershift: Action Bar 8) or Action Bar 1. The Alt keyboard follows Action Bar 1, the Alt mouse the plain mouse bar.
+-- Out of a fight only (apply).
 local function sortForQuietHUD()
 	local byId = {}
 	for _, o in ipairs(wbBars) do byId[o.id] = o end
@@ -621,6 +636,9 @@ local function sortForQuietHUD()
 		end
 		bar.main = main
 		for i = 1, 8 do wipe(bar.holders[i].qhudButtons) end
+		-- (QuietHUD's "show the whole HUD" (hold Alt) leaves WackyBars as it is when the box in the options is unticked: his
+		-- ask, Nov 10; QuietHUD reads qhudNoPeek on the holders)
+		for i = 1, 8 do bar.holders[i].qhudNoPeek = DB.noPeek or nil end
 		local h = bar.holders[main]
 		for _, b in ipairs(bar.buttons) do
 			if b:GetParent() ~= h then b:SetParent(h) end
@@ -753,7 +771,7 @@ local function summary()
 			if q.kind == "move" then moves = moves + 1
 			elseif q.kind == "mirror" then mirror = mirror + 1
 			elseif q.slot then spare = spare + 1
-			else none = none + 1 end
+			elseif not hiddenButton(b) and not spotGone(q.spot) then none = none + 1 end
 			if q.kind == "other" then other[#other + 1] = q.def .. " (" .. q.other .. ")" end
 		end
 	end
@@ -820,6 +838,11 @@ local function setTo(o)
 end
 local function setKey(b, k)
 	if InCombatLockdown() then return end
+	-- (a key that moves you is not taken: it would stop moving you while WackyBars is on; audit Nov 10)
+	if k and MOVES[GetBindingAction(k) or ""] then
+		say(GetBindingText(k) .. " moves you, so it stays a movement key. Pick another key.")
+		return
+	end
 	if k then
 		-- (the key leaves every other button, also one on a bar that is off, or switching that bar on took it back; audit
 		-- Nov 10)
@@ -924,7 +947,7 @@ end
 local function snapOn()
 	if inBlizzardEditMode then
 		local em = _G.EditModeManagerFrame
-		local ok, on = pcall(function() return em:IsSnapEnabled() and em.Grid and em.Grid:IsShown() end)
+		local ok, on = pcall(function() return em:IsSnapEnabled() end) -- (as the game: Snap alone; the grid only adds lines)
 		return ok and on and true or false
 	end
 	return not DB.noSnap
@@ -1347,7 +1370,7 @@ local function toggleOptions()
 		local framed = ok and w and w.SetTitle and type(w.Inset) == "table"
 		if ok and w and not framed then w:Hide() end
 		options = framed and w or CreateFrame("Frame", "WackyBarsOptions", UIParent)
-		options:SetSize(400, 84 + 4 * 26 + 36 + 26 + 30 + 144 + 50)
+		options:SetSize(400, 84 + 4 * 26 + 36 + 26 + 26 + 30 + 144 + 50)
 		options:SetPoint("CENTER")
 		options:SetFrameStrata("DIALOG")
 		options:SetClampedToScreen(true)
@@ -1433,6 +1456,9 @@ local function toggleOptions()
 			function(v) DB.noEdges = (not v) or nil end)
 		check(200, below - 78, "Wheel click button", function() return not DB.noWheel end,
 			function(v) DB.noWheel = (not v) or nil end)
+		below = below - 26
+		check(20, below - 78, "Show when QuietHUD shows the whole HUD (Alt)", function() return not DB.noPeek end,
+			function(v) DB.noPeek = (not v) or nil end)
 		below = below - 26
 		-- Movement keys: one button cycles Key Bindings, WASD, ESDF (three states, so not boxes)
 		text(24, below - 86, "Movement keys", "GameFontHighlight")
@@ -1616,12 +1642,12 @@ SlashCmdList.WACKYBARS = function(msg)
 		local n = tonumber(rest)
 		if InCombatLockdown() then say("after the fight.") return end
 		-- (each bar keeps its top left corner: before, the old places came back at the new size, off where they were)
-		if n and n >= 0.3 and n <= 3 then
+		if n and n >= 0.5 and n <= 2 then -- (the same range as the size slider)
 			for _, bar in ipairs(wbBars) do sizeBar(bar, n) end
 		elseif rest == "" or rest == "auto" then
 			for _, bar in ipairs(wbBars) do sizeBar(bar, 1) end
 		else
-			say("/wbars scale 0.3 to 3 sets every bar (1 = the size of your Action Bar 1 buttons), or /wbars scale auto")
+			say("/wbars scale 0.5 to 2 sets every bar (1 = the size of your Action Bar 1 buttons), or /wbars scale auto")
 			return
 		end
 		apply()

@@ -30,7 +30,10 @@ rawset(wb, "IsMouseOver", function() return over or overQ end)
 -- Action Bar 4: Mouse over; Action Bar 1: Hide hotkeys (bits are bars 1 to 8)
 QuietHUDDB = { settingsVersion = 1, barMouse = 8, barHotkeys = 1, barClicks = 9 }
 local pet1 = M.newObj("CheckButton", "PetActionButton1")
-for _, b in ipairs({ q, side1, pet1 }) do rawset(b, "SetMouseClickEnabled", function(s, v) s.__clicks = v end) end
+for _, b in ipairs({ q, side1, pet1 }) do
+	rawset(b, "SetMouseClickEnabled", function(s, v) s.__clicks = v; s.__clickWrites = (s.__clickWrites or 0) + 1 end)
+	rawset(b, "IsMouseClickEnabled", function(s) return s.__clicks ~= false end) -- (QuietHUD asks the button itself)
+end
 local ok, err = M.run(HERE .. "/../wow-quiethud/QuietHUD/QuietHUD.toc", "QuietHUD", {})
 check("QuietHUD loads", ok) if not ok then io.write(err, "\n") os.exit(1) end
 for _, e in ipairs({ "ADDON_LOADED", "PLAYER_LOGIN", "PLAYER_ENTERING_WORLD" }) do M.fire(e, "QuietHUD") end
@@ -49,6 +52,20 @@ check("the pet bar goes with Action Bar 8's Click through", pet1.__clicks == fal
 QuietHUDDB.barClicks = 9
 QuietHUD_RefreshBarClicks()
 check("Bar 8 unticked: the pet bar takes clicks", pet1.__clicks == true)
+q.__clickWrites = 0
+QuietHUD_RefreshBarClicks()
+check("applied again with nothing changed: no click write (on change only)", q.__clickWrites == 0)
+q.__clicks = true -- (something else switches Q's clicks back on)
+QuietHUD_RefreshBarClicks()
+check("Q's clicks switched back on by something else: off again at the next apply", q.__clicks == false)
+-- WackyBars sorts a new button into a holder after QuietHUD's rebuild: it gets its hover hook at the refresh.
+local late = M.newObj("CheckButton", "WackyBarsPlainE", h1)
+local hooked = {}
+rawset(late, "HookScript", function(_, script) hooked[script] = true end)
+h1.qhudButtons = { q, late }
+QuietHUD_RefreshBarClicks()
+check("a button WackyBars sorted in after the rebuild gets its hover hook", hooked.OnEnter and hooked.OnLeave)
+h1.qhudButtons = { q }
 over = true
 run(2)
 check("mouse on the thumb (Bar 4, Mouse over): its holder comes up", h4.__alpha > 0.5)
@@ -75,6 +92,21 @@ rawset(_G, "InCombatLockdown", function() return true end)
 run(2)
 check("in a fight: Q's holder up with Action Bar 1", h1.__alpha > 0.5 and h1.__alpha == MainActionBar.__alpha)
 check("in a fight they still take no clicks (set before, it holds)", q.__clicks == false)
+-- WackyBars' "Show when QuietHUD shows the whole HUD" unticked: holding Alt leaves its holders where they are.
+rawset(_G, "UnitAffectingCombat", function() return false end)
+rawset(_G, "InCombatLockdown", function() return false end)
+M.fire("PLAYER_REGEN_ENABLED")
+run(12)
+local before = h1.__alpha
+h1.qhudNoPeek = true
+QuietHUDDB.peekAlt = true
+rawset(_G, "IsAltKeyDown", function() return true end)
+run(2)
+check("Alt held: the game bars come up, the no-peek holder stays (" .. tostring(before) .. ")", MainActionBar.__alpha > 0.5
+	and h1.__alpha == before)
+rawset(_G, "IsAltKeyDown", function() return false end)
+run(3)
+check("Alt let go: it never flashed up, the bars are back down", h1.__alpha == before and MainActionBar.__alpha == before)
 check("no Lua errors", #M.errors == 0)
 for _, e in ipairs(M.errors) do io.write(e, "\n") end
 os.exit(fails == 0 and 0 or 1)

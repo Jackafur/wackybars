@@ -253,6 +253,16 @@ edit.__scripts.OnKeyDown(edit, "ESCAPE")
 check("Esc with nothing hovered finishes", not edit:IsShown() and _G.WackyBarsPlainQ.__ignoreParentAlpha == false)
 check("the arrows go back into the bar's holder (they fade with it)", _G.WackyBarsPlainE.wb.arrowTex.__parent == _G.WackyBarsHoldPlain1)
 
+-- A key that moves you is refused in edit (it would stop moving you).
+_G.WackyBars_ToggleEdit()
+rawset(_G.WackyBarsPlainY, "IsMouseOver", function() return true end)
+edit.__scripts.OnUpdate(edit)
+edit.__scripts.OnKeyDown(edit, "E")
+check("Edit keys refuses E (it moves you)", DB.keys.PlainY == nil and overrides.E == nil)
+rawset(_G.WackyBarsPlainY, "IsMouseOver", function() return false end)
+edit.__scripts.OnUpdate(edit)
+edit.__scripts.OnKeyDown(edit, "ESCAPE")
+
 -- A free button gets another key in edit (Ctrl + B), and loses it with Esc.
 _G.WackyBars_ToggleEdit()
 rawset(_G.WackyBarsPlain2, "IsMouseOver", function() return true end)
