@@ -636,9 +636,6 @@ local function sortForQuietHUD()
 		end
 		bar.main = main
 		for i = 1, 8 do wipe(bar.holders[i].qhudButtons) end
-		-- (QuietHUD's "show the whole HUD" (hold Alt) leaves WackyBars as it is when the box in the options is unticked: his
-		-- ask, Nov 10; QuietHUD reads qhudNoPeek on the holders)
-		for i = 1, 8 do bar.holders[i].qhudNoPeek = DB.noPeek[bar.id] or nil end -- (per bar: his ask, Nov 10)
 		local h = bar.holders[main]
 		for _, b in ipairs(bar.buttons) do
 			if b:GetParent() ~= h then b:SetParent(h) end
@@ -1382,7 +1379,7 @@ local function toggleOptions()
 		if UISpecialFrames then table.insert(UISpecialFrames, "WackyBarsOptions") end
 		if framed then
 			options:SetTitle("WackyBars")
-			if options.SetPortraitToAsset then pcall(options.SetPortraitToAsset, options, "Interface\\Icons\\INV_Misc_Book_09") end
+			if options.SetPortraitToAsset then pcall(options.SetPortraitToAsset, options, "Interface\\AddOns\\WackyBars\\icon") end -- (its own icon, as QuietHUD does)
 		else
 			local bg = options:CreateTexture(nil, "BACKGROUND")
 			bg:SetAllPoints()
@@ -1435,27 +1432,20 @@ local function toggleOptions()
 			local bar = barById(id)
 			if bar then check(x, y, name or "", function() return barOn(bar) end, function(v) DB.off[bar.id] = (not v) or nil end) end
 		end
-		-- (Alt: the bar comes up when QuietHUD shows the whole HUD; unticked it stays as it is: his ask, Nov 10, per bar)
-		local function altBox(x, y, id)
-			if barById(id) then check(x, y, "", function() return not DB.noPeek[id] end, function(v) DB.noPeek[id] = (not v) or nil end) end
-		end
 		text(20, -70, "Bars")
 		text(140, -72, "Keyboard", "GameFontHighlightSmall")
-		text(196, -72, "Alt", "GameFontHighlightSmall")
 		text(246, -72, "Mouse", "GameFontHighlightSmall")
-		text(292, -72, "Alt", "GameFontHighlightSmall")
 		for i, L in ipairs(LAYERS) do
 			local y = -84 - (i - 1) * 26
 			text(24, y - 6, L.mod == "" and "Plain" or L.id, "GameFontHighlight")
 			barBox(150, y, L.id)
-			altBox(192, y, L.id)
 			barBox(246, y, "Mouse" .. L.id)
-			altBox(288, y, "Mouse" .. L.id)
 		end
 		local below = -84 - #LAYERS * 26
 		barBox(20, below, "MouseHyper", "Hypershift")
-		altBox(288, below, "MouseHyper")
-		text(24, below - 26, "Alt: shows when QuietHUD shows the whole HUD (its Alt key)", "GameFontHighlightSmall")
+		-- (how each bar fades, shows on mouse over, with the whole HUD or lets clicks through: QuietHUD's Action bars page,
+		-- where each row is named after the WackyBars bars on it; one place for all of it, the owner, Nov 10)
+		text(24, below - 26, "How bars fade and show: QuietHUD (if installed), Action bars page.", "GameFontHighlightSmall")
 		below = below - 56
 		check(20, below, "Staggered keyboard rows", function() return DB.stagger end, function(v) DB.stagger = v or nil end)
 		check(20, below - 26, "Show the modifier in labels (sQ, cQ, aQ, h1)", function() return DB.mods end,
@@ -1570,12 +1560,8 @@ local function onEvent(_, event, arg)
 	if event == "ADDON_LOADED" and arg == ADDON then
 		WackyBarsCharDB = type(WackyBarsCharDB) == "table" and WackyBarsCharDB or {}
 		DB = WackyBarsCharDB
-		-- (noPeek was one box for all bars for an hour on Nov 10: ticked then means every bar)
-		if DB.noPeek == true then
-			DB.noPeek = {}
-			for _, bar in ipairs(wbBars) do DB.noPeek[bar.id] = true end
-		end
-		for _, k in ipairs({ "keys", "spare", "pos", "off", "hidden", "sizes", "noPeek" }) do
+		DB.noPeek = nil -- (the Alt boxes, Nov 10, moved to QuietHUD's Show with Alt column the same day)
+		for _, k in ipairs({ "keys", "spare", "pos", "off", "hidden", "sizes" }) do
 			if type(DB[k]) ~= "table" then DB[k] = {} end
 		end
 		-- the one size for all bars (before Nov 10, late) becomes each bar's size

@@ -425,22 +425,19 @@ check("a bar switched off gives its empty spare slots to the others", DB.spare.C
 	and DB.spare.ShiftY == nil)
 DB.off.Shift = nil
 
--- The options: a box per bar (keyboard and mouse side by side, a row per modifier), Hypershift under them.
+-- The options: a box per bar (keyboard and mouse side by side, a row per modifier), Hypershift under them; one page (the
+-- Alt boxes went to QuietHUD's Show with Alt column, Nov 10).
 local boxes = {}
 for _, f in ipairs(M.frames) do
 	if f.__parent == _G.WackyBarsOptions and f.__template == "UICheckButtonTemplate" then boxes[#boxes + 1] = f end
 end
-local shiftBox = boxes[5] -- (Plain keyboard, its Alt, Plain mouse, its Alt, Shift keyboard, ...)
+local shiftBox = boxes[3] -- (Plain keyboard, Plain mouse, Shift keyboard, ...)
 shiftBox.__scripts.OnClick(shiftBox)
 check("the Shift keyboard box switches that bar off", DB.off.Shift and not _G.WackyBarsShift:IsShown())
 shiftBox.__scripts.OnClick(shiftBox)
 check("and on again", not DB.off.Shift and _G.WackyBarsShift:IsShown())
-local plainAlt = boxes[2]
-plainAlt.__scripts.OnClick(plainAlt)
-check("the keyboard's Alt box unticked: only its holders stay out of QuietHUD's whole-HUD peek", DB.noPeek.Plain
-	and _G.WackyBarsHoldPlain1.qhudNoPeek and not _G.WackyBarsHoldMousePlain4.qhudNoPeek)
-plainAlt.__scripts.OnClick(plainAlt)
-check("ticked again: back in", not DB.noPeek.Plain and not _G.WackyBarsHoldPlain1.qhudNoPeek)
+check("no Alt boxes of its own any more (QuietHUD's Show with Alt column)", DB.noPeek == nil
+	and _G.WackyBarsHoldPlain1.qhudNoPeek == nil)
 check("no mouse over or fight settings of its own (QuietHUD's job)", DB.mouseover == nil and DB.combatHide == nil
 	and _G.WackyBarsPlain.__alpha ~= 0)
 -- Every bar off: the game's bars are back.

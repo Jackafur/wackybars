@@ -33,10 +33,11 @@ Action Bars. Action Bar 1's art and tint are copied on (BetterBlizzFrames dark m
 
 **QuietHUD mirrors per bar.** Each bar holds eight small frames, `WackyBarsHold<bar><1 to 8>`, one per game bar, and the
 whole bar sits in the one of the game bar most of its buttons show slots of (keyboard: Bar 1, thumbs: Bar 4,
-Hypershift: Bar 8; the Alt bars always Bar 1, his pick). Per button it left stragglers (Shift + wheel click stayed shown on
-a mouse over bar), so one bar, one row. QuietHUD lists those holders with their game bar, so the bar follows that bar's row
-on its Action bars page: Fade, Mouse over, Low health, Low mana, Hide hotkeys, Hide names (Shorten hotkey text stays
-WackyBars' own labels). The holders have no size; their `qhudButtons` count for mouse over. The "WackyBars" frame itself
+Hypershift: Bar 8; the Alt keyboard always Bar 1, the Alt mouse with the plain mouse bar, his pick). Per button it left
+stragglers (Shift + wheel click stayed shown on a mouse over bar), so one bar, one row. QuietHUD lists those holders with
+their game bar, so the bar follows that bar's row on its Action bars page, where the rows carry WackyBars' names: Fade,
+Mouse over only, Low health, Low mana, Click through, Show with Alt, Hide hotkeys, Hide names (Shorten hotkey text stays
+WackyBars' own labels). Needs QuietHUD newer than 1.6.1 for this. The holders have no size; their `qhudButtons` count for mouse over. The "WackyBars" frame itself
 is not faded. Pixel shift moves the bars. WackyBars has no fade settings of its own. The move boxes are named
 `WackyBarsMove<bar>`.
 
