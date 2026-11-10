@@ -27,8 +27,9 @@ tint with it). The colour looks put one gradient across each bar: Purple to pink
 colours), Dracula (`#8BE9FD` to `#BD93F9`), Nord (`#88C0D0` to `#5E81AC`), Gruvbox (`#FE8019` to `#FABD2F`) or Catppuccin
 (`#CBA6F7` to `#FAB387`). Each button takes its slice: its frame, its cooldown pie (dimmed, the seconds in the slice's
 colour) and a proc's glow; the pet buttons in it too, the movement arrows, and the minimap's ring (the game's,
-BetterBlizzFrames' classic border and day / night ring). Back to Default puts the game's dark pie, the yellow glow and
-BetterBlizzFrames' own colours back at once, no reload.
+BetterBlizzFrames' classic border and day / night ring). Glass behind each bar (a box in the same list, for any colour
+look): a dark see-through panel in the look's colours, a little bigger than each bar, fading with it. Back to Default puts
+the game's dark pie, the yellow glow and BetterBlizzFrames' own colours back at once and shows no glass, no reload.
 
 **Arrows** (`/wbars`, one button): how strong the movement arrows are, 20, 30 (default), 50, 70 or 100%. QuietHUD's fade
 multiplies on top.

@@ -815,9 +815,40 @@ local function mapLook()
 		if t.wbOrig then mapOne(t) end
 	end
 end
+-- Glass (idea 3, his "maybe this to", Nov 10 night): WoW can't blur, so it is a dark see-through panel behind each bar, a
+-- little bigger than the bar, in the look's two colours dimmed: one clean panel per bar, not the shadow per button that was
+-- the "phantom box". Glass behind each bar, a box in the Look list, goes with any colour look; Default shows none. It sits
+-- in the holder QuietHUD fades, so it fades with its bar's buttons (on the bar itself while you edit keys or move bars,
+-- like the arrows). Made the first time it shows; written at each look update, nothing runs in between.
+local GLASS_DIM, GLASS_ALPHA, GLASS_PAD = 0.25, 0.5, 6
+local function glassHome(bar) return ((editing or moving) and bar.frame) or bar.arrowHome or bar.frame end
+local function glassLook()
+	local on = lookOf() and DB.glass and CreateColor and true or false
+	local r0, g0, b0 = mix(0)
+	local r1, g1, b1 = mix(1)
+	for _, bar in ipairs(wbBars) do
+		local t = bar.frame.wbGlass
+		if on and not t then
+			t = bar.frame:CreateTexture("WackyBarsGlass" .. bar.id, "BACKGROUND")
+			t:SetTexture("Interface\\Buttons\\WHITE8X8")
+			t:SetPoint("TOPLEFT", bar.frame, "TOPLEFT", -GLASS_PAD, GLASS_PAD)
+			t:SetPoint("BOTTOMRIGHT", bar.frame, "BOTTOMRIGHT", GLASS_PAD, -GLASS_PAD)
+			bar.frame.wbGlass = t
+		end
+		if t and on then
+			t:SetParent(glassHome(bar))
+			t:SetGradient("HORIZONTAL", CreateColor(r0 * GLASS_DIM, g0 * GLASS_DIM, b0 * GLASS_DIM, GLASS_ALPHA),
+				CreateColor(r1 * GLASS_DIM, g1 * GLASS_DIM, b1 * GLASS_DIM, GLASS_ALPHA))
+			t:Show()
+		elseif t then
+			t:Hide()
+		end
+	end
+end
 local function matchLook()
 	hookGlow()
 	mapLook()
+	glassLook()
 	local ref = _G.ActionButton1
 	if not ref then return end
 	-- (only the colour here: the art is laid out by layout and after each of the library's updates)
@@ -1309,6 +1340,8 @@ local function showFull(on)
 	-- bar's arrows were gone in Move bars, Nov 10)
 	for _, bar in ipairs(wbBars) do
 		for _, a in ipairs(bar.arrows) do a.tex:SetParent(on and bar.frame or bar.arrowHome or bar.frame) end
+		-- (the glass too, idea 3: under the arrows there, and back in its holder after, Move bars closing without an apply)
+		if bar.frame.wbGlass then bar.frame.wbGlass:SetParent(glassHome(bar)) end
 	end
 end
 
@@ -2016,6 +2049,16 @@ local function toggleOptions()
 				root:CreateRadio(L.hint and (L.name .. " (" .. L.hint .. ")") or L.name, function() return lookOf() == L end,
 					function() setLook(L.id) end)
 			end
+			-- glass (idea 3): one box for every colour look rather than each look twice; greyed while Default is picked
+			-- (kept for when a colour look comes back)
+			if root.CreateDivider then root:CreateDivider() end
+			local glass = root.CreateCheckbox and root:CreateCheckbox("Glass behind each bar", function() return DB.glass end,
+				function()
+					DB.glass = (not DB.glass) or nil
+					matchLook()
+					if refreshOptions then refreshOptions() end
+				end)
+			if type(glass) == "table" and glass.SetEnabled then glass:SetEnabled(function() return lookOf() ~= nil end) end
 		end
 		local lookButton = button(150, below - 80, 160, "", function(self)
 			if MenuUtil and MenuUtil.CreateContextMenu then
@@ -2026,7 +2069,10 @@ local function toggleOptions()
 			for i, L in ipairs(LOOKS) do if lookOf() == L then at = i end end
 			setLook(LOOKS[at + 1] and LOOKS[at + 1].id or nil)
 		end)
-		controls[#controls + 1] = function() local L = lookOf() lookButton:SetText(L and L.name or "Default") end
+		controls[#controls + 1] = function()
+			local L = lookOf()
+			lookButton:SetText(L and (L.name .. (DB.glass and " + glass" or "")) or "Default")
+		end
 		below = below - 30
 		-- Bar art: the faint wing in empty buttons, as on Action Bar 1 with its bar art; off (the default) a plain dark slot, as
 		-- on the game's other bars (his "any way to turn the bar art off in wbars?", Nov 10)

@@ -969,6 +969,71 @@ do -- 8: more looks. The Look button opens a short list (the game's menu); each 
 	SlashCmdList.WACKYBARS("status")
 	rawset(_G, "MenuUtil", nil)
 end
+do -- 3: glass. A box in the Look list for every colour look: one dark see-through panel per bar, in the bar's holder.
+	for _, n in ipairs({ "WackyBarsPlain", "WackyBarsMouseHyper" }) do -- (their glass records its colours)
+		rawset(_G[n], "CreateTexture", function(s, _, layer)
+			local t = tex()
+			t.__parent, t.__layer = s, layer
+			return t
+		end)
+	end
+	local lookBtn
+	for _, f in ipairs(M.frames) do
+		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+	end
+	local entries = {}
+	local root = {
+		CreateRadio = function(_, text, isSel, set) entries[#entries + 1] = { text = text, isSel = isSel, set = set } end,
+		CreateDivider = function() end,
+		CreateCheckbox = function(_, text, isSel, set)
+			local e = { text = text, isSel = isSel, set = set, box = true }
+			function e:SetEnabled(v) self.enabled = v end
+			entries[#entries + 1] = e
+			return e
+		end,
+	}
+	rawset(_G, "MenuUtil", { CreateContextMenu = function(owner, gen) wipe(entries) gen(owner, root) end })
+	local function click(name)
+		lookBtn.__scripts.OnClick(lookBtn)
+		for _, e in ipairs(entries) do if e.text:find(name, 1, true) == 1 then e.set() return e end end
+	end
+	lookBtn.__scripts.OnClick(lookBtn)
+	local box = entries[#entries]
+	check("the Look list ends with one box, Glass behind each bar, greyed while Default is picked", box and box.box
+		and box.text == "Glass behind each bar" and type(box.enabled) == "function" and box.enabled() == false and not box.isSel())
+	check("Default: no glass is made", _G.WackyBarsPlain.wbGlass == nil and _G.WackyBarsMouseHyper.wbGlass == nil)
+	click("Purple to pink")
+	click("Glass behind each bar")
+	local glass, Q = _G.WackyBarsPlain.wbGlass, _G.WackyBarsPlainQ
+	local g = glass and glass.__grad
+	check("Purple to pink + glass: each bar gets one panel, in the holder QuietHUD fades with its buttons, behind them",
+		glass and glass.__shown ~= false and glass.__parent == Q:GetParent() and glass.__layer == "BACKGROUND"
+		and _G.WackyBarsMouseHyper.wbGlass ~= nil and lookBtn.__text == "Purple to pink + glass" and DB.glass == true)
+	local p1, p2 = glass.__points[1], glass.__points[2]
+	check("... a little bigger than its bar (6 all round)", p1 and p2 and p1[1] == "TOPLEFT" and p1[2] == _G.WackyBarsPlain
+		and p1[4] == -6 and p1[5] == 6 and p2[1] == "BOTTOMRIGHT" and p2[4] == 6 and p2[5] == -6)
+	check("... dark and see-through: the look's two colours at a quarter, half see-through (#BD93F9 left, #FF79C6 right)", g
+		and g[1] == "HORIZONTAL" and math.abs(g[2].r - 0xBD / 255 * 0.25) < 0.001 and math.abs(g[3].b - 0xC6 / 255 * 0.25) < 0.001
+		and g[2].a == 0.5 and g[3].a == 0.5)
+	SlashCmdList.WACKYBARS("move")
+	local onFrame = glass.__parent == _G.WackyBarsPlain
+	SlashCmdList.WACKYBARS("move")
+	check("Move bars: the glass sits on the bar (full, under the arrows), back in its holder after", onFrame
+		and glass.__parent == Q:GetParent())
+	click("Nord")
+	g = glass.__grad
+	check("Nord + glass: the glass takes Nord's colours", g and math.abs(g[2].r - 0x88 / 255 * 0.25) < 0.001
+		and lookBtn.__text == "Nord + glass" and glass.__shown ~= false)
+	click("Default")
+	check("Default: the glass hides (the box is kept for a colour look), the label says Default", glass.__shown == false
+		and _G.WackyBarsMouseHyper.wbGlass.__shown == false and DB.glass == true and lookBtn.__text == "Default")
+	click("Gruvbox")
+	check("Gruvbox: the glass is back", glass.__shown == true and lookBtn.__text == "Gruvbox + glass")
+	click("Glass behind each bar")
+	check("glass unticked: hidden, the label says Gruvbox", glass.__shown == false and DB.glass == nil and lookBtn.__text == "Gruvbox")
+	click("Default")
+	rawset(_G, "MenuUtil", nil)
+end
 
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
