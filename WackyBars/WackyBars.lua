@@ -2148,4 +2148,5 @@ ns.wb = {
 	effKey = effKey, hotkeyText = hotkeyText, matchLook = matchLook, apply = apply, barOn = barOn,
 	editing = function() return editing end, moving = function() return moving end,
 	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {},
+	port = port, -- (Profiles.lua: a profile that switches bars on or off hands out spare slots as the bar boxes do)
 }

@@ -935,6 +935,81 @@ do
 	SlashCmdList.WACKYBARS("status")
 end
 
+-- Bar profiles (Profiles.lua, his "this could be nice to"): one Profiles row in /wbars; a profile keeps which bars show,
+-- their places and their sizes; one click on the name switches; changes go into the profile you are on.
+do
+	local popups = {}
+	rawset(_G, "StaticPopupDialogs", {})
+	rawset(_G, "StaticPopup_Show", function(which) popups[#popups + 1] = which end)
+	local function dialogSays(text) return { GetEditBox = function() return { GetText = function() return text end } end } end
+	local opts = _G.WackyBarsOptions
+	rawset(opts, "GetRegions", function(s) -- (the window's labels; the fake game lists none)
+		local out = {}
+		for _, o in ipairs(M.frames) do if o.__parent == s and o.__kind == "CreateFontString" then out[#out + 1] = o end end
+		return unpack(out)
+	end)
+	if opts.__shown then SlashCmdList.WACKYBARS("") end
+	SlashCmdList.WACKYBARS("") -- (the window opens: the row is made)
+	local pick, save, label = _G.WackyBarsProfilePick, _G.WackyBarsProfileSave, nil
+	for _, o in ipairs(M.frames) do if o.__parent == opts and o.__text == "Profiles" then label = o end end
+	local box = label and label.__points[1] and label.__points[1][2]
+	check("Profiles: one row in /wbars, the label, a name button (None yet) and Save where the other rows have buttons",
+		pick and save and pick.__text == "None" and save.__text == "Save" and pick.__w == 160 and box
+		and box.__shown == false and label.__points[1][1] == "LEFT" and pick.__points[1][2] == box and pick.__points[1][4] == 130)
+	pick.__scripts.OnClick(pick)
+	check("... no profile yet: a click on the name asks for one", popups[#popups] == "WACKYBARS_PROFILE")
+	local P = StaticPopupDialogs.WACKYBARS_PROFILE
+	local keys0, pos0, sizes0, off0 = M.copy(DB.keys), M.copy(DB.pos), M.copy(DB.sizes), M.copy(DB.off)
+	P.OnAccept(dialogSays(" Leveling "))
+	check("... Save: the bars kept as Leveling (copies of which are off, places, sizes), on it now", DB.profile == "Leveling"
+		and #DB.profiles == 1 and DB.profiles[1].pos ~= DB.pos and DB.profiles[1].off ~= DB.off and pick.__text == "Leveling")
+	P.OnAccept(dialogSays("Dungeon"))
+	-- on Dungeon: the Shift keyboard switched off, the keyboard moved, the mouse bar made bigger
+	DB.off.Shift = true
+	DB.pos.Plain = { "TOPLEFT", "BOTTOMLEFT", 111, 222 }
+	DB.sizes.MousePlain = 1.5
+	SlashCmdList.WACKYBARS("status")
+	local function shiftSpares()
+		local n = 0
+		for id in pairs(DB.spare) do if id:match("^Shift") then n = n + 1 end end
+		return n
+	end
+	check("... (Dungeon: Shift keyboard off, its empty spare slots handed back)", shiftSpares() == 0
+		and _G.WackyBarsShift.__shown == false)
+	pick.__scripts.OnClick(pick)
+	local d = DB.profiles[2]
+	check("one click on the name: Leveling's bars back (Shift keyboard on, the keyboard's place, the mouse bar's size)",
+		DB.profile == "Leveling" and pick.__text == "Leveling" and _G.WackyBarsShift.__shown == true and DB.off.Shift == nil
+		and (_G.WackyBarsPlain.__points[1][4] ~= 111) and _G.WackyBarsMousePlain.__scale == 1)
+	check("... the Shift keyboard's free keys get spare slots again (as its box in /wbars does)", shiftSpares() > 0)
+	check("... and Dungeon kept the changes made on it", d.name == "Dungeon" and d.off.Shift == true and d.pos.Plain[3] == 111
+		and d.sizes.MousePlain == 1.5)
+	pick.__scripts.OnClick(pick)
+	check("one more click: Dungeon (keyboard at its place, mouse bar at 150%, Shift keyboard off)", DB.profile == "Dungeon"
+		and _G.WackyBarsPlain.__points[1][4] == 111 and _G.WackyBarsMousePlain.__scale == 1.5 and _G.WackyBarsShift.__shown == false)
+	local same = true
+	for k, v in pairs(keys0) do if DB.keys[k] ~= v then same = false end end
+	for k, v in pairs(DB.keys) do if keys0[k] ~= v then same = false end end
+	check("... keys stay the same in every profile", same)
+	SlashCmdList.WACKYBARS("profile leveling")
+	check("/wbars profile leveling switches to it (for a macro)", DB.profile == "Leveling" and _G.WackyBarsShift.__shown == true)
+	SlashCmdList.WACKYBARS("profile nope")
+	check("... a name that isn't one says so", M.printed[#M.printed]:find("no profile named nope", 1, true) ~= nil)
+	combat = true
+	pick.__scripts.OnClick(pick)
+	combat = false
+	check("in a fight a click switches nothing (after the fight)", DB.profile == "Leveling"
+		and M.printed[#M.printed]:find("after the fight", 1, true) ~= nil)
+	P.OnAlt(dialogSays("dungeon"))
+	check("Delete in the Save box: Dungeon gone, still on Leveling", #DB.profiles == 1 and DB.profile == "Leveling")
+	local posNow = DB.pos
+	P.OnAlt(dialogSays("Leveling"))
+	check("... deleting the one you are on: no profile, the bars stay as they are", DB.profile == nil and #DB.profiles == 0
+		and pick.__text == "None" and DB.pos == posNow)
+	DB.keys, DB.pos, DB.sizes, DB.off, DB.profiles = keys0, pos0, sizes0, off0, nil
+	SlashCmdList.WACKYBARS("status")
+end
+
 objMt.__index = baseIndex -- (the fake game as it was)
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
