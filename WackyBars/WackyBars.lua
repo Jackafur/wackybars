@@ -606,9 +606,31 @@ end
 -- "default and the thing i suggested"): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode tint with it, as
 -- before); Purple to pink colours each button's frame (and its empty slot's wing with Bar art) with a slice of one gradient across its bar,
 -- #BD93F9 to #FF79C6 (his desktop's, the same as his mouse pointer). Set at each look update, no timer.
-local GRAD_FROM, GRAD_TO = { 0xBD / 255, 0x93 / 255, 0xF9 / 255 }, { 0xFF / 255, 0x79 / 255, 0xC6 / 255 }
-local function mix(t) return GRAD_FROM[1] + (GRAD_TO[1] - GRAD_FROM[1]) * t, GRAD_FROM[2] + (GRAD_TO[2] - GRAD_FROM[2]) * t,
-	GRAD_FROM[3] + (GRAD_TO[3] - GRAD_FROM[3]) * t end
+-- More looks (idea 8, Nov 10 night: "one-click swaps that undo as easily as today's two"): four palettes, each two of its own
+-- colours, left to right, picked in the Look list in /wbars; every look colours the same things as Purple to pink (the
+-- buttons, the cooldown pie, the proc glow, the minimap ring, the arrows). Purple to pink already is Dracula's purple to
+-- pink, so Dracula is its cyan to purple; Nord its Frost (nord8 to nord10); Gruvbox its bright orange to bright yellow;
+-- Catppuccin (Mocha) its mauve to peach (mauve to pink would look like Purple to pink). Saved as DB.look (nil: Default;
+-- Purple to pink keeps its old name, "gradient").
+local function hex(n) return { math.floor(n / 65536) / 255, math.floor(n / 256) % 256 / 255, n % 256 / 255 } end
+local LOOKS = {
+	{ id = "gradient", name = "Purple to pink", from = hex(0xBD93F9), to = hex(0xFF79C6) },
+	{ id = "dracula", name = "Dracula", hint = "cyan to purple", from = hex(0x8BE9FD), to = hex(0xBD93F9) },
+	{ id = "nord", name = "Nord", hint = "frost blues", from = hex(0x88C0D0), to = hex(0x5E81AC) },
+	{ id = "gruvbox", name = "Gruvbox", hint = "orange to yellow", from = hex(0xFE8019), to = hex(0xFABD2F) },
+	{ id = "catppuccin", name = "Catppuccin", hint = "mauve to peach", from = hex(0xCBA6F7), to = hex(0xFAB387) },
+}
+local LOOK_BY_ID = {}
+for _, L in ipairs(LOOKS) do LOOK_BY_ID[L.id] = L end
+-- The colour look picked, or nil: Default (also for a saved look this version does not know).
+local function lookOf() return DB and DB.look and LOOK_BY_ID[DB.look] or nil end
+-- A colour of the gradient, t from 0 (left) to 1 (right): the picked look's, Purple to pink's while Default is picked (a
+-- feature file may draw in it then).
+local function mix(t)
+	local L = lookOf() or LOOKS[1]
+	local a, z = L.from, L.to
+	return a[1] + (z[1] - a[1]) * t, a[2] + (z[2] - a[2]) * t, a[3] + (z[3] - a[3]) * t
+end
 -- Where a button sits across its bar, 0 (left edge) to 1 (right edge), for its left and right side.
 local function span(b, bar)
 	local bl, bw = b:GetLeft(), b:GetWidth()
@@ -683,7 +705,7 @@ local function glowShown(frame)
 	local o = type(frame) == "table" and frame.__LBGoverlay
 	if not o then return end
 	local q = frame.wb
-	if q and q.bar and DB and DB.look == "gradient" then glowOn(frame, q.bar, frame) else glowOff(o) end
+	if q and q.bar and lookOf() then glowOn(frame, q.bar, frame) else glowOff(o) end
 end
 -- Hooked once all addons are in (the first look update), and again if a newer copy of the library loaded later replaced it.
 local glowFn
@@ -696,7 +718,7 @@ end
 -- b: a WackyBars button or a game pet button in a spot: its spot's bar, and its spot's slice (the pet button is scaled
 -- into its spot, so its own left and width are in other units; audit Nov 10).
 tint = function(b, bar)
-	if not (DB and DB.look == "gradient") then
+	if not lookOf() then
 		pieOff(b, b.wbPetArt)
 		glowOff(b.__LBGoverlay)
 		return
@@ -756,7 +778,7 @@ local function mapSlices(list)
 end
 local function mapOne(t)
 	mapBusy = true
-	if DB and DB.look == "gradient" then
+	if lookOf() then
 		local sl = t.wbSlice
 		local r0, g0, b0 = mix(sl and sl[1] or 0)
 		local r1, g1, b1 = mix(sl and sl[2] or 1)
@@ -774,20 +796,20 @@ end
 local function mapLook()
 	if not CreateColor then return end
 	local list = mapTextures()
-	if DB and DB.look == "gradient" then mapSlices(list) end
+	if lookOf() then mapSlices(list) end
 	for _, t in ipairs(list) do
-		if not t.wbOrig and DB and DB.look == "gradient" then
+		if not t.wbOrig and lookOf() then
 			local r, g, b = t:GetVertexColor()
 			t.wbOrig = { r or 1, g or 1, b or 1, (t.IsDesaturated and t:IsDesaturated()) and true or false }
 			hooksecurefunc(t, "SetVertexColor", function(self, r2, g2, b2)
 				if mapBusy then return end
 				self.wbOrig[1], self.wbOrig[2], self.wbOrig[3] = r2 or 1, g2 or 1, b2 or 1
-				if DB.look == "gradient" then mapOne(self) end
+				if lookOf() then mapOne(self) end
 			end)
 			hooksecurefunc(t, "SetDesaturated", function(self, v)
 				if mapBusy then return end
 				self.wbOrig[4] = v and true or false
-				if DB.look == "gradient" then mapOne(self) end
+				if lookOf() then mapOne(self) end
 			end)
 		end
 		if t.wbOrig then mapOne(t) end
@@ -807,7 +829,7 @@ local function matchLook()
 			local t = a.tex
 			-- (their opacity: the Arrows button in the options, 30% unless picked; QuietHUD's fade multiplies on top)
 			t:SetAlpha(DB and DB.arrowAlpha or 0.3)
-			if DB and DB.look == "gradient" then
+			if lookOf() then
 				gradOn(t, bar, t)
 				t.wbGrad = true
 			elseif t.wbGrad then
@@ -1978,14 +2000,33 @@ local function toggleOptions()
 		end)
 		controls[#controls + 1] = function() moveCycle:SetText(DB.moveKeys or "From Key Bindings") end
 		below = below - 30
-		-- Look: Default (your Action Bar 1's, BetterBlizzFrames' dark with it) or Purple to pink (the look block above)
+		-- Look: Default (your Action Bar 1's, BetterBlizzFrames' dark with it) or a colour look (the look block above). Six looks
+		-- are too many to step through one click at a time, so the button opens a short list, the game's own menu: any look in
+		-- two clicks, Default always on top (idea 8, decided by the commandments: clear, most intuitive). Without that menu it
+		-- steps through them.
 		text(24, below - 86, "Look", "GameFontHighlight")
-		local lookCycle = button(150, below - 80, 160, "", function()
-			DB.look = (DB.look ~= "gradient") and "gradient" or nil
+		local function setLook(id)
+			DB.look = id
 			matchLook()
 			if refreshOptions then refreshOptions() end -- (its label: it kept the old look's name; audit Nov 10)
+		end
+		local function lookMenu(_, root)
+			root:CreateRadio("Default", function() return not lookOf() end, function() setLook(nil) end)
+			for _, L in ipairs(LOOKS) do
+				root:CreateRadio(L.hint and (L.name .. " (" .. L.hint .. ")") or L.name, function() return lookOf() == L end,
+					function() setLook(L.id) end)
+			end
+		end
+		local lookButton = button(150, below - 80, 160, "", function(self)
+			if MenuUtil and MenuUtil.CreateContextMenu then
+				MenuUtil.CreateContextMenu(self, lookMenu)
+				return
+			end
+			local at = 0
+			for i, L in ipairs(LOOKS) do if lookOf() == L then at = i end end
+			setLook(LOOKS[at + 1] and LOOKS[at + 1].id or nil)
 		end)
-		controls[#controls + 1] = function() lookCycle:SetText(DB.look == "gradient" and "Purple to pink" or "Default") end
+		controls[#controls + 1] = function() local L = lookOf() lookButton:SetText(L and L.name or "Default") end
 		below = below - 30
 		-- Bar art: the faint wing in empty buttons, as on Action Bar 1 with its bar art; off (the default) a plain dark slot, as
 		-- on the game's other bars (his "any way to turn the bar art off in wbars?", Nov 10)
@@ -2221,6 +2262,7 @@ end
 ns.wb = {
 	buttons = buttons, bars = wbBars, db = function() return DB end, say = say,
 	part = part, art = art, mix = mix, gradOn = gradOn, span = span, tint = tint, colourOne = colourOne,
+	lookOf = lookOf, -- (the colour look picked, { id, name, from, to }, or nil for Default)
 	effKey = effKey, hotkeyText = hotkeyText, matchLook = matchLook, apply = apply, barOn = barOn,
 	editing = function() return editing end, moving = function() return moving end,
 	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {},

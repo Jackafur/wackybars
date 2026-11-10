@@ -22,9 +22,13 @@ onto another; where two overlap, the later one's box is on top.
 off, so their keys and stealth / vehicle paging still work). The stance and possess bars stay the game's. All
 WackyBars bars off, or WackyBars off in the AddOns list: the game's bars are back.
 
-**Look** (`/wbars`, one button): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode tint with it) or Purple to
-pink, one gradient across each bar, `#BD93F9` to `#FF79C6` (the desktop's colours), on the pet buttons in it too, and on the minimap's ring (the game's, BetterBlizzFrames' classic border and day / night ring).
-Back to Default puts BetterBlizzFrames' own colours back at once, no reload. The movement arrows take the look too.
+**Look** (`/wbars`, one button that opens a short list): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode
+tint with it). The colour looks put one gradient across each bar: Purple to pink (`#BD93F9` to `#FF79C6`, the desktop's
+colours), Dracula (`#8BE9FD` to `#BD93F9`), Nord (`#88C0D0` to `#5E81AC`), Gruvbox (`#FE8019` to `#FABD2F`) or Catppuccin
+(`#CBA6F7` to `#FAB387`). Each button takes its slice: its frame, its cooldown pie (dimmed, the seconds in the slice's
+colour) and a proc's glow; the pet buttons in it too, the movement arrows, and the minimap's ring (the game's,
+BetterBlizzFrames' classic border and day / night ring). Back to Default puts the game's dark pie, the yellow glow and
+BetterBlizzFrames' own colours back at once, no reload.
 
 **Arrows** (`/wbars`, one button): how strong the movement arrows are, 20, 30 (default), 50, 70 or 100%. QuietHUD's fade
 multiplies on top.

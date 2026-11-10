@@ -921,6 +921,54 @@ do -- 9: the proc glow. LibButtonGlow as the library has it: glow frames of six 
 	LBG.HideOverlayGlow(Q)
 	rawset(_G, "LibStub", oldStub)
 end
+do -- 8: more looks. The Look button opens a short list (the game's menu); each look colours what Purple to pink does.
+	if not _G.WackyBarsOptions:IsShown() then SlashCmdList.WACKYBARS("") end
+	local lookBtn
+	for _, f in ipairs(M.frames) do
+		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+	end
+	check("the Look button in /wbars shows Default", lookBtn ~= nil)
+	if lookBtn then lookBtn.__scripts.OnClick(lookBtn) end
+	check("without the game's menu a click steps to the next look: Purple to pink, and says so", DB.look == "gradient"
+		and lookBtn.__text == "Purple to pink")
+	local menuOwner, menuGen
+	rawset(_G, "MenuUtil", { CreateContextMenu = function(owner, gen) menuOwner, menuGen = owner, gen end })
+	lookBtn.__scripts.OnClick(lookBtn)
+	local radios = {}
+	local root = { CreateRadio = function(_, text, isSel, set) radios[#radios + 1] = { text = text, isSel = isSel, set = set } end }
+	if menuGen then menuGen(menuOwner, root) end
+	check("with the game's menu a click opens the list: six looks, Default first, the one picked marked", menuOwner == lookBtn
+		and #radios == 6 and radios[1].text == "Default" and radios[2].text == "Purple to pink" and radios[2].isSel()
+		and not radios[1].isSel() and radios[3].text == "Dracula (cyan to purple)" and DB.look == "gradient")
+	local function pick(name)
+		for _, r in ipairs(radios) do if r.text:find(name, 1, true) == 1 then r.set() end end
+	end
+	pick("Nord")
+	local g = qTex.__grad
+	check("Nord picked: the label says Nord, Q's frame starts at Nord's #88C0D0 on the bar's left, toward #5E81AC", DB.look == "nord"
+		and lookBtn.__text == "Nord" and g and math.abs(g[2].r - 0x88 / 255) < 0.01 and math.abs(g[2].g - 0xC0 / 255) < 0.01
+		and g[3].r < 0x88 / 255 and radios[4].isSel())
+	check("... the minimap ring and the arrows follow Nord (#88C0D0 to #5E81AC)", ring.__grad
+		and math.abs(ring.__grad[2].b - 0xD0 / 255) < 0.01 and math.abs(ring.__grad[3].r - 0x5E / 255) < 0.01 and arrowT.__grad ~= nil)
+	local starts, allOk = { Dracula = 0x8BE9FD, Gruvbox = 0xFE8019, Catppuccin = 0xCBA6F7 }, true
+	for name, hx in pairs(starts) do
+		pick(name)
+		local s = qTex.__grad and qTex.__grad[2]
+		if not (s and math.abs(s.r - math.floor(hx / 65536) / 255) < 0.01 and math.abs(s.b - hx % 256 / 255) < 0.01
+			and lookBtn.__text == name) then allOk = false end
+	end
+	check("Dracula, Gruvbox and Catppuccin each start at their own colour (cyan, orange, mauve) and say their name", allOk)
+	pick("Default")
+	check("Default from the list: Q has Action Bar 1's dark again, the ring BetterBlizzFrames' dark, the arrows grey",
+		DB.look == nil and qTex.__grad == nil and qTex.__vc and qTex.__vc[1] == 0.2 and ring.__grad == nil and ring.__vc[1] == 0.3
+		and arrowT.__grad == nil and lookBtn.__text == "Default")
+	DB.look = "someday" -- (a look a newer version saved)
+	SlashCmdList.WACKYBARS("status")
+	check("a saved look this version does not know shows Default", qTex.__grad == nil and qTex.__vc[1] == 0.2 and ring.__grad == nil)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+	rawset(_G, "MenuUtil", nil)
+end
 
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
