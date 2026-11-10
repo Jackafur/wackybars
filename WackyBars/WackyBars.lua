@@ -12,7 +12,8 @@
 -- treats that holder like the game bar's own buttons. Input: a key you did not touch fires the game's own button, exactly as
 -- without WackyBars; a key WackyBars binds presses its button the same way Bartender's do, on key down. Nothing is added in
 -- between.
-local ADDON = ...
+local ADDON, ns = ...
+ns = ns or {} -- (the addon's table, shared with the feature files after this one in the TOC: ns.wb, end of file)
 -- The buttons are Bartender4's (LibActionButton-1.0, in libs\): their secure state lives in attributes, so nothing the
 -- game reads before a protected action is written by WackyBars' own code. The game's ActionBarButtonTemplate, used until
 -- Nov 10, made every button "WackyBars' code" to the game (a right click got blocked; hovering in a fight, stance and
@@ -261,6 +262,16 @@ for si, set in ipairs(SETS) do
 end
 
 local function say(msg) print("|cff66bbffWackyBars|r: " .. msg) end
+-- Runs the hooks a feature file added (ns.wb, end of this file): an error in one is reported, it doesn't stop the rest.
+local function runHooks(list)
+	for _, fn in ipairs(list or {}) do
+		local ok, err = pcall(fn)
+		if not ok then
+			local h = geterrorhandler and geterrorhandler()
+			if h then h(err) else error(err, 0) end
+		end
+	end
+end
 local function barOn(bar) return not (DB and DB.off[bar.id]) end
 -- A button counts when its bar is on, you haven't hidden it (right-click in Edit keys) and it has a slot. One that does not
 -- count shows nothing and sets no key.
@@ -736,6 +747,7 @@ local function matchLook()
 		local pb = _G["PetActionButton" .. n]
 		if pb and pb.wbSpot then colourOne(pb, ref) end
 	end
+	runHooks(ns.wb and ns.wb.lookHooks) -- (the feature files' looks)
 end
 local lookQueued = false
 local function queueLook()
@@ -1159,6 +1171,7 @@ local function apply()
 	applying = false
 	if refreshOptions then refreshOptions() end
 	if moving and refreshMovers then refreshMovers() end
+	runHooks(ns.wb and ns.wb.applyHooks) -- (the feature files, after everything is in place)
 end
 
 local function summary()
@@ -1786,7 +1799,7 @@ local function toggleOptions()
 		local framed = ok and w and w.SetTitle and type(w.Inset) == "table"
 		if ok and w and not framed then w:Hide() end
 		options = framed and w or CreateFrame("Frame", "WackyBarsOptions", UIParent)
-		options:SetSize(400, 84 + 4 * 26 + 56 + 26 + 30 + 30 + 30 + 30 + 144 + 50)
+		options:SetSize(400, 84 + 4 * 26 + 56 + 26 + 30 + 30 + 30 + 30 + 144 + 50 + 30 * #(ns.wb and ns.wb.optionRows or {}))
 		options:SetPoint("CENTER")
 		options:SetFrameStrata("DIALOG")
 		options:SetClampedToScreen(true)
@@ -1919,6 +1932,11 @@ local function toggleOptions()
 			arrowCycle:SetText(("%d%%"):format(math.floor((DB.arrowAlpha or 0.3) * 100 + 0.5)))
 		end
 		below = below - 30
+		-- the boxes the feature files add (ns.wb.optionRows: { label, get, set }), one row each
+		for _, r in ipairs(ns.wb and ns.wb.optionRows or {}) do
+			check(20, below - 82, r.label, r.get, r.set)
+			below = below - 30
+		end
 		text(24, below - 88, "Size: Move bars, click a bar (each bar its own, like Edit Mode)", "GameFontHighlightSmall")
 		button(20, below - 110, 170, "Move bars", function() options:Hide() startMove() end)
 		button(200, below - 110, 170, "Edit keys", function() options:Hide() startEdit() end)
@@ -2079,6 +2097,8 @@ SLASH_WACKYBARS1, SLASH_WACKYBARS2 = "/wbars", "/wackybars"
 SlashCmdList.WACKYBARS = function(msg)
 	local cmd, rest = (msg or ""):lower():match("^(%S*)%s*(.-)$")
 	if not DB then return end
+	local extra = ns.wb and ns.wb.slash[cmd] -- (a word a feature file added)
+	if extra then extra(rest) return end
 	if cmd == "" or cmd == "options" then
 		toggleOptions()
 	elseif cmd == "edit" then
@@ -2111,6 +2131,21 @@ SlashCmdList.WACKYBARS = function(msg)
 		if not InCombatLockdown() then port() apply() end
 		summary()
 	else
-		say("/wbars (options), move, edit, scale <n|auto>, stagger, reset, status")
+		local words = {}
+		for w in pairs(ns.wb and ns.wb.slash or {}) do words[#words + 1] = w end
+		table.sort(words)
+		say("/wbars (options), move, edit, scale <n|auto>, stagger, reset, status" .. (#words > 0 and (", " .. table.concat(words, ", ")) or ""))
 	end
 end
+
+-- For WackyBars' feature files, listed after this one in the TOC (the ideas he picked on Nov 10 night): what they may use
+-- and where they plug in, so each lives in a file of its own instead of editing this one. optionRows: a box each in /wbars
+-- ({ label, get, set }, set runs out of a fight, then the bars are applied again); slash: /wbars <word> = fn(rest);
+-- lookHooks: after each look update; applyHooks: after each apply (out of a fight, everything in place).
+ns.wb = {
+	buttons = buttons, bars = wbBars, db = function() return DB end, say = say,
+	part = part, art = art, mix = mix, gradOn = gradOn, span = span, tint = tint, colourOne = colourOne,
+	effKey = effKey, hotkeyText = hotkeyText, matchLook = matchLook, apply = apply, barOn = barOn,
+	editing = function() return editing end, moving = function() return moving end,
+	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {},
+}

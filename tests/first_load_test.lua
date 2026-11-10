@@ -45,7 +45,7 @@ WackyBarsCharDB = { hideGame = true, told = true, off = {}, keys = { PlainBlank1
 	spare = { PlainBlank1 = 13, MousePlainWheelUp = 83, PlainCaps = 15, Shift3 = 16 },
 	pos = { Plain = { "TOPLEFT", "BOTTOMLEFT", 1029, 299 } }, scale = 1.1 }
 dofile(HERE .. "/tests/fake_lab.lua")(M)
-local ok, err = M.run(HERE .. "/WackyBars/WackyBars.lua", "WackyBars")
+local ok, err = dofile(HERE .. "/tests/load_wackybars.lua")(M, HERE) -- (WackyBars.lua and the feature files after it)
 check("loads", ok) if not ok then out(err) os.exit(1) end
 M.fire("ADDON_LOADED", "WackyBars")
 M.fire("PLAYER_ENTERING_WORLD")

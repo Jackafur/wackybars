@@ -91,7 +91,7 @@ end
 
 WackyBarsCharDB = { v = 2 } -- (every bar on, the Shift, Ctrl and Alt copies too; the first load is checked in first_load_test)
 dofile(HERE .. "/tests/fake_lab.lua")(M)
-local ok, err = M.run(HERE .. "/WackyBars/WackyBars.lua", "WackyBars")
+local ok, err = dofile(HERE .. "/tests/load_wackybars.lua")(M, HERE) -- (WackyBars.lua and the feature files after it)
 check("loads", ok)
 if not ok then out(err) os.exit(1) end
 M.fire("ADDON_LOADED", "WackyBars")
