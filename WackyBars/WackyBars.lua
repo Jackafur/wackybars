@@ -625,16 +625,50 @@ local function gradOn(t, bar, b)
 	t:SetDesaturated(true) -- (the frame's own grey, so the colour reads true)
 	t:SetGradient("HORIZONTAL", CreateColor(r0, g0, b0, 1), CreateColor(r1, g1, b1, 1))
 end
+-- The cooldown pie (his "sounds cool but i dont really get it. but we can try it out maybe", Nov 10 night): in Purple to
+-- pink each button's pie is the colour of its slice of the bar's gradient (the middle of the slice: a pie has one colour),
+-- dimmed so a button on cooldown still reads darker than a ready one (nothing bright on the HUD), and the seconds count down
+-- in the slice's own colour. Only the dark pie: loss of control keeps its red, charges have no pie. Default puts the game's
+-- dark pie back: the template's black at 0.64 (the library never colours it on this client: its cooldowns come from
+-- duration objects and its cast effects are off), on the game's pet buttons the black their own code sets. Written at each
+-- look update, nothing runs in between.
+local PIE_DIM, PIE_ALPHA = 0.4, 0.64
+local function pieOn(b, bar, at)
+	local cd = b.cooldown
+	if type(cd) ~= "table" or not cd.SetSwipeColor then return end
+	local t0, t1 = span(at, bar)
+	local r, g, bl = mix((t0 + t1) / 2)
+	cd:SetSwipeColor(r * PIE_DIM, g * PIE_DIM, bl * PIE_DIM, PIE_ALPHA)
+	local fs = cd.GetCountdownFontString and cd:GetCountdownFontString()
+	if type(fs) == "table" and fs.SetTextColor then
+		if not cd.wbNumbers and fs.GetTextColor then cd.wbNumbers = { fs:GetTextColor() } end
+		fs:SetTextColor(r, g, bl)
+	end
+	cd.wbPie = true
+end
+-- pet: the game's pet button (its own code set its black without an alpha, so it gets the same call back)
+local function pieOff(b, pet)
+	local cd = b.cooldown
+	if type(cd) ~= "table" or not cd.wbPie then return end
+	cd.wbPie = nil
+	if pet then cd:SetSwipeColor(0, 0, 0) else cd:SetSwipeColor(0, 0, 0, PIE_ALPHA) end
+	local fs, o = cd.GetCountdownFontString and cd:GetCountdownFontString(), cd.wbNumbers
+	if type(fs) == "table" and fs.SetTextColor and o and o[1] then fs:SetTextColor(o[1], o[2], o[3], o[4]) end
+end
 -- b: a WackyBars button or a game pet button in a spot: its spot's bar, and its spot's slice (the pet button is scaled
 -- into its spot, so its own left and width are in other units; audit Nov 10).
 tint = function(b, bar)
-	if not (DB and DB.look == "gradient") then return end
+	if not (DB and DB.look == "gradient") then
+		pieOff(b, b.wbPetArt)
+		return
+	end
 	bar = bar or (b.wb and b.wb.bar) or (b.wbSpot and b.wbSpot.wb.bar)
 	if not bar then return end
 	local at = b.wbSpot or b
 	gradOn(part(b, "NormalTexture"), bar, at)
 	gradOn(part(b, "PushedTexture"), bar, at) -- (the pressed frame too: each press flashed the plain one; audit Nov 10)
 	gradOn(part(b, "SlotArt"), bar, at)
+	pieOn(b, bar, at)
 end
 -- A button's colour: Action Bar 1's on the frame, the pressed look and both slots; Purple to pink (tint) goes on top.
 local function colourOne(b, ref)
@@ -1021,6 +1055,7 @@ local function placePets()
 		elseif pb and petMoved[n] then
 			petMoved[n], pb.wbSpot, pb.wbPetArt = nil, nil, nil
 			restoreArt(pb)
+			pieOff(pb, true) -- (its dark pie back too)
 			if pb.SetIgnoreParentAlpha then pb:SetIgnoreParentAlpha(false) end
 			pb:SetParent(pb.container or _G.PetActionBar or UIParent)
 			pb:SetScale(1)

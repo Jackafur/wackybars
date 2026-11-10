@@ -830,6 +830,50 @@ do -- the Arrows button in /wbars: one click, 30% to 50%
 	SlashCmdList.WACKYBARS("status")
 end
 
+-- The look tab's ideas (Nov 10 night, his picks 2, 9, 8, 3, 4), each in its own block. The fakes they need are made here.
+do -- 2: the gradient cooldown pie. Default leaves the game's dark pie; Purple to pink gives each button its slice's colour.
+	local function pieFakes(cd)
+		local fs = M.newObj("FontString")
+		fs.__tc = { 1, 1, 1, 1 }
+		rawset(fs, "SetTextColor", function(s, r, g, b, a) s.__tc = { r, g, b, a } end)
+		rawset(fs, "GetTextColor", function(s) return s.__tc[1], s.__tc[2], s.__tc[3], s.__tc[4] end)
+		rawset(cd, "SetSwipeColor", function(s, r, g, b, a) s.__swipe = { r, g, b, a } end)
+		rawset(cd, "GetCountdownFontString", function() return fs end)
+		return fs
+	end
+	local qCd = _G.WackyBarsPlainQ.cooldown
+	local qNum = pieFakes(qCd)
+	SlashCmdList.WACKYBARS("status")
+	check("Default: the cooldown pie and its seconds stay as the game has them", qCd.__swipe == nil and qNum.__tc[1] == 1)
+	DB.look = "gradient"
+	SlashCmdList.WACKYBARS("status")
+	local sw, tc = qCd.__swipe, qNum.__tc
+	check("Purple to pink: Q's pie is its slice's colour dimmed to 40%, at the game's 0.64; the seconds in the slice's colour",
+		sw and math.abs(sw[4] - 0.64) < 0.001 and math.abs(sw[1] - tc[1] * 0.4) < 0.001 and math.abs(sw[2] - tc[2] * 0.4) < 0.001
+		and math.abs(sw[3] - tc[3] * 0.4) < 0.001 and tc[1] >= 0xBD / 255 - 0.01 and tc[3] <= 0xF9 / 255 + 0.01
+		and tc[3] >= 0xC6 / 255 - 0.01)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+	sw = qCd.__swipe
+	check("Default again: the game's dark pie back (black at 0.64), the seconds white again", sw[1] == 0 and sw[2] == 0
+		and sw[3] == 0 and math.abs(sw[4] - 0.64) < 0.001 and qNum.__tc[1] == 1 and qNum.__tc[2] == 1 and qNum.__tc[3] == 1)
+	-- the game's pet button in a spot: its slice's pie too, and the black its own code sets once it is back in its bar
+	local petCd = M.newObj("Cooldown", nil, pet1)
+	rawset(pet1, "cooldown", petCd)
+	pieFakes(petCd)
+	DB.look = "gradient"
+	binds["ALT-F1"] = "BONUSACTIONBUTTON1"
+	M.fire("UPDATE_BINDINGS")
+	check("Purple to pink: the game's pet button in a spot gets its slice's pie too", pet1:GetParent() == _G.WackyBarsPetMouseAlt
+		and petCd.__swipe and math.abs(petCd.__swipe[4] - 0.64) < 0.001 and petCd.__swipe[3] > 0)
+	binds["ALT-F1"] = nil
+	M.fire("UPDATE_BINDINGS")
+	check("... back in the game's pet bar: the black its own code sets (no alpha), whatever the look", petCd.__swipe[1] == 0
+		and petCd.__swipe[3] == 0 and petCd.__swipe[4] == nil and pet1:GetParent() == _G.PetActionBarButtonContainer1)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+end
+
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)
 for _, e in ipairs(M.errors) do out(e) end
