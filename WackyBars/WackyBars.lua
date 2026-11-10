@@ -638,7 +638,7 @@ local function sortForQuietHUD()
 		for i = 1, 8 do wipe(bar.holders[i].qhudButtons) end
 		-- (QuietHUD's "show the whole HUD" (hold Alt) leaves WackyBars as it is when the box in the options is unticked: his
 		-- ask, Nov 10; QuietHUD reads qhudNoPeek on the holders)
-		for i = 1, 8 do bar.holders[i].qhudNoPeek = DB.noPeek or nil end
+		for i = 1, 8 do bar.holders[i].qhudNoPeek = DB.noPeek[bar.id] or nil end -- (per bar: his ask, Nov 10)
 		local h = bar.holders[main]
 		for _, b in ipairs(bar.buttons) do
 			if b:GetParent() ~= h then b:SetParent(h) end
@@ -1370,7 +1370,7 @@ local function toggleOptions()
 		local framed = ok and w and w.SetTitle and type(w.Inset) == "table"
 		if ok and w and not framed then w:Hide() end
 		options = framed and w or CreateFrame("Frame", "WackyBarsOptions", UIParent)
-		options:SetSize(400, 84 + 4 * 26 + 36 + 26 + 26 + 30 + 144 + 50)
+		options:SetSize(400, 84 + 4 * 26 + 56 + 26 + 30 + 144 + 50)
 		options:SetPoint("CENTER")
 		options:SetFrameStrata("DIALOG")
 		options:SetClampedToScreen(true)
@@ -1435,18 +1435,28 @@ local function toggleOptions()
 			local bar = barById(id)
 			if bar then check(x, y, name or "", function() return barOn(bar) end, function(v) DB.off[bar.id] = (not v) or nil end) end
 		end
+		-- (Alt: the bar comes up when QuietHUD shows the whole HUD; unticked it stays as it is: his ask, Nov 10, per bar)
+		local function altBox(x, y, id)
+			if barById(id) then check(x, y, "", function() return not DB.noPeek[id] end, function(v) DB.noPeek[id] = (not v) or nil end) end
+		end
 		text(20, -70, "Bars")
-		text(150, -72, "Keyboard", "GameFontHighlightSmall")
-		text(250, -72, "Mouse", "GameFontHighlightSmall")
+		text(140, -72, "Keyboard", "GameFontHighlightSmall")
+		text(196, -72, "Alt", "GameFontHighlightSmall")
+		text(246, -72, "Mouse", "GameFontHighlightSmall")
+		text(292, -72, "Alt", "GameFontHighlightSmall")
 		for i, L in ipairs(LAYERS) do
 			local y = -84 - (i - 1) * 26
 			text(24, y - 6, L.mod == "" and "Plain" or L.id, "GameFontHighlight")
-			barBox(160, y, L.id)
-			barBox(256, y, "Mouse" .. L.id)
+			barBox(150, y, L.id)
+			altBox(192, y, L.id)
+			barBox(246, y, "Mouse" .. L.id)
+			altBox(288, y, "Mouse" .. L.id)
 		end
 		local below = -84 - #LAYERS * 26
-		barBox(20, below, "MouseHyper", "Hypershift (your items, faded with Action Bar 8)")
-		below = below - 36
+		barBox(20, below, "MouseHyper", "Hypershift")
+		altBox(288, below, "MouseHyper")
+		text(24, below - 26, "Alt: shows when QuietHUD shows the whole HUD (its Alt key)", "GameFontHighlightSmall")
+		below = below - 56
 		check(20, below, "Staggered keyboard rows", function() return DB.stagger end, function(v) DB.stagger = v or nil end)
 		check(20, below - 26, "Show the modifier in labels (sQ, cQ, aQ, h1)", function() return DB.mods end,
 			function(v) DB.mods = v or nil end)
@@ -1456,9 +1466,6 @@ local function toggleOptions()
 			function(v) DB.noEdges = (not v) or nil end)
 		check(200, below - 78, "Wheel click button", function() return not DB.noWheel end,
 			function(v) DB.noWheel = (not v) or nil end)
-		below = below - 26
-		check(20, below - 78, "Show when QuietHUD shows the whole HUD (Alt)", function() return not DB.noPeek end,
-			function(v) DB.noPeek = (not v) or nil end)
 		below = below - 26
 		-- Movement keys: one button cycles Key Bindings, WASD, ESDF (three states, so not boxes)
 		text(24, below - 86, "Movement keys", "GameFontHighlight")
@@ -1563,7 +1570,12 @@ local function onEvent(_, event, arg)
 	if event == "ADDON_LOADED" and arg == ADDON then
 		WackyBarsCharDB = type(WackyBarsCharDB) == "table" and WackyBarsCharDB or {}
 		DB = WackyBarsCharDB
-		for _, k in ipairs({ "keys", "spare", "pos", "off", "hidden", "sizes" }) do
+		-- (noPeek was one box for all bars for an hour on Nov 10: ticked then means every bar)
+		if DB.noPeek == true then
+			DB.noPeek = {}
+			for _, bar in ipairs(wbBars) do DB.noPeek[bar.id] = true end
+		end
+		for _, k in ipairs({ "keys", "spare", "pos", "off", "hidden", "sizes", "noPeek" }) do
 			if type(DB[k]) ~= "table" then DB[k] = {} end
 		end
 		-- the one size for all bars (before Nov 10, late) becomes each bar's size
