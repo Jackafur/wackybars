@@ -169,7 +169,7 @@ check("bars down: the pet bar down with them", PetActionBar.__alpha < 0.05)
 QuietHUDDB.ovPetBar = 0
 overQ = true
 run(2)
-check("Pet bar at 0 (Action bars): the bars' opacity", math.abs(PetActionBar.__alpha - MainActionBar.__alpha) < 0.01)
+check("Pet bar at 0 (Global; Action bars on Global too): the bars' opacity", math.abs(PetActionBar.__alpha - MainActionBar.__alpha) < 0.01)
 overQ = false
 run(4)
 -- "Mouse over only bars come up together" (QuietHUD's Action bars page, Nov 10): Bars 4 and 8 Mouse over only; the mouse
@@ -244,6 +244,17 @@ check(("  and the columns after it close up (Click through %s -> %s)"):format(to
 altBox.__scripts.OnClick(altBox)
 check("ticked again: back, Show with Alt", QuietHUDDB.peekAlt == true and peekHead.__shown ~= false)
 check("  and they open up again", xOf(clickHead) == clickX)
+-- Alt plus a long bound key (his setup, Nov 10 screenshot: the full key name spilled into the boxes): the first way and a count
+rawset(_G, "GetBindingKey", function(b) if b == "QUIETHUD_PEEK" then return "ALT-CTRL-SHIFT-F" end end)
+M.fire("UPDATE_BINDINGS")
+SlashCmdList["QUIETHUD"]("")
+SlashCmdList["QUIETHUD"]("")
+altBox.__scripts.OnClick(altBox)
+altBox.__scripts.OnClick(altBox)
+check("Alt and a bound key: the heading reads Show with Alt or key (" .. tostring(peekHead.__text):gsub("\n", " ") .. ")",
+	peekHead.__text == "Show with\nAlt or key")
+rawset(_G, "GetBindingKey", nil)
+M.fire("UPDATE_BINDINGS")
 check("no Lua errors", #M.errors == 0)
 for _, e in ipairs(M.errors) do io.write(e, "\n") end
 os.exit(fails == 0 and 0 or 1)
