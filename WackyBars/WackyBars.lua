@@ -18,6 +18,8 @@ local ADDON = ...
 -- Nov 10, made every button "WackyBars' code" to the game (a right click got blocked; hovering in a fight, stance and
 -- vehicle changes could too: the audit of Nov 10).
 local LAB = LibStub("LibActionButton-1.0")
+-- (QuietHUD's Tap Alt is told when a WackyBars button is used: its keys are override bindings it can't see)
+local function tapUsed() if QuietHUD_TapKeyUsed then QuietHUD_TapKeyUsed() end end
 -- Their settings: empty buttons show (WackyBars hides the ones it wants gone), keys bound by WackyBars press them the
 -- way Bartender's do (key down casting works), the hotkey text is WackyBars' own (GetHotkey below).
 local BUTTON_CONFIG = {
@@ -241,6 +243,9 @@ for si, set in ipairs(SETS) do
 				b:SetAttribute("checkfocuscast", true)
 				b:SetAttribute("checkmouseovercast", true)
 				b.wb = { id = bar.id .. S.name, def = S.key and (L.mod .. S.key), mod = L.mod, spot = S, bar = bar }
+				-- (a WackyBars key is an override binding QuietHUD's Tap Alt can't see: pressed with Alt held it flipped the
+				-- whole HUD; the button says it was used; audit Nov 10)
+				b:HookScript("PreClick", tapUsed)
 				buttons[#buttons + 1] = b
 				bar.buttons[#bar.buttons + 1] = b
 				if set.arrows then
@@ -405,22 +410,190 @@ end
 -- (the library asks each button for its hotkey text when bindings change: it gets WackyBars' label)
 for _, b in ipairs(buttons) do b.GetHotkey = hotkeyText end
 
--- Copies the look of your own Action Bar 1 buttons (the art, BetterBlizzFrames' dark mode tint) onto every button.
-local function copyTexture(dst, src, setAtlas, fx, fy)
-	if not (dst and src) then return end
-	local atlas = src.GetAtlas and src:GetAtlas()
-	if atlas and setAtlas then setAtlas(atlas) end
-	if dst.SetDrawLayer and src.GetDrawLayer then dst:SetDrawLayer(src:GetDrawLayer()) end
-	if dst.SetSize and src.GetSize then
-		local w, h = src:GetSize()
-		if w and h and w > 0 then dst:SetSize(w * fx, h * fy) end
+-- The button art, laid out as the game lays out Action Bar 1's buttons with its bar art on (ActionButtonTemplate.xml in
+-- Blizzard_ActionBar and the bar branch of its UpdateButtonArt): the 46 x 45 frame and its pressed look pinned at the
+-- button's top left over the 45 icon, the icon mask centred on the icon at its own size, the highlight and checked glow
+-- 46 x 45 at the top left, the flash, border and spell glows at their own size at the top left, the cooldown 3 in from the
+-- icon's edges. Every size is scaled by the button against the game's 45, so a wide key, a small spot and a bigger bar keep
+-- the proportions. Every other game bar (Action Bars 2 to 8, Action Bar 1 with Hide Bar Art, the library's buttons) has
+-- the other frame, "AddRow": 51 x 51 with a drop shadow hanging 6 past the right and bottom, which read as a box behind
+-- each button (his "get rid of the weird phantom bar behind it", Nov 10); squeezed onto the icon, with the mask stretched
+-- onto it, it also cropped the icons ("the icons are all cropped"). Action Bar 1 gives only its colour (colourOne, below).
+-- The library puts the AddRow frame back on every update; its OnButtonUpdate callback (below) puts this back.
+local FRAME_ATLAS, PUSHED_ATLAS = "UI-HUD-ActionBar-IconFrame", "UI-HUD-ActionBar-IconFrame-Down"
+-- A button's part: the frame textures through their getters (as the game's own code reaches them), the rest by key.
+local function part(b, key)
+	local get = b["Get" .. key]
+	local t = type(get) == "function" and get(b) or nil
+	if type(t) ~= "table" then t = b[key] end
+	return (type(t) == "table" and t.SetPoint) and t or nil
+end
+-- A part the template sizes by its atlas: that size on a 45 button, read once from a WackyBars button as the template made
+-- it (else the atlas's), the same for every button. The game's pet buttons (30, sized by their own template) only read it.
+-- Unknown: the part is left as the template made it.
+local NATURAL = {}
+local function naturalSize(key, t)
+	local n = NATURAL[key]
+	if not n and t then
+		local w, h = t:GetSize()
+		if not (type(w) == "number" and w > 0 and type(h) == "number" and h > 0) then
+			local atlas = t.GetAtlas and t:GetAtlas()
+			local info = type(atlas) == "string" and C_Texture and C_Texture.GetAtlasInfo and C_Texture.GetAtlasInfo(atlas)
+			if type(info) == "table" then w, h = info.width, info.height end
+		end
+		if type(w) == "number" and w > 0 and type(h) == "number" and h > 0 then
+			n = { w, h }
+			NATURAL[key] = n
+		end
 	end
+	if n then return n[1], n[2] end
+end
+-- { key, place }: "frame" = 46 x 45 at the top left (the frame, pressed, highlight, checked); "own" = its own size at the
+-- top left (flash, border, new action and spell glows); "mask" = its own size, centred on the icon.
+local ART = {
+	{ "NormalTexture", "frame" }, { "PushedTexture", "frame" }, { "HighlightTexture", "frame" }, { "CheckedTexture", "frame" },
+	{ "Flash", "own" }, { "Border", "own" }, { "NewActionTexture", "own" }, { "SpellHighlightTexture", "own" },
+	{ "IconMask", "mask" },
+}
+-- (what the library resets on each update: the frame, the two glows' size, the slot background and the swipe; it never
+-- touches the rest, so after its update only these go back on)
+local LIBRARY_RESETS = { NormalTexture = true, HighlightTexture = true, CheckedTexture = true }
+-- The cooldowns, so far in from the icon's edges (the template's): the swipe, loss of control, charges.
+local COOLDOWNS = { { "cooldown", 3 }, { "lossOfControlCooldown", 3 }, { "chargeCooldown", 2 } }
+local LAYERED, LAYERED_LIGHT = { "NormalTexture", "PushedTexture" }, { "NormalTexture" }
+-- b: a WackyBars button, or the game's pet button in a spot (b.wbPetArt: laid out for its own size, 30). light: only what
+-- the library resets (after its update).
+local function art(b, light)
+	local w, h
+	if b.wbSize then w, h = b.wbSize[1], b.wbSize[2] else w, h = b:GetWidth(), b:GetHeight() end
+	if not (type(w) == "number" and w > 0 and type(h) == "number" and h > 0) then return end
+	local kx, ky = w / 45, h / 45
+	local own = not b.wbPetArt
+	-- (the parts sized by their atlas are read before anything here moves them)
+	if own then
+		for _, p in ipairs(ART) do
+			local t = p[2] ~= "frame" and part(b, p[1])
+			if t then naturalSize(p[1], t) end
+		end
+	end
+	if b.SetNormalAtlas then b:SetNormalAtlas(FRAME_ATLAS) end
+	if not light and b.SetPushedAtlas then b:SetPushedAtlas(PUSHED_ATLAS) end
+	for _, p in ipairs(ART) do
+		local key, place = p[1], p[2]
+		local t = (not light or LIBRARY_RESETS[key]) and part(b, key)
+		local tw, th
+		if t and place == "frame" then
+			tw, th = 46 * kx, 45 * ky
+		elseif t then
+			local nw, nh = naturalSize(key, own and t or nil)
+			if nw then tw, th = nw * kx, nh * ky end
+		end
+		if tw then
+			t:ClearAllPoints()
+			if place == "mask" then
+				t:SetPoint("CENTER", type(b.icon) == "table" and b.icon or b, "CENTER", 0, 0)
+			else
+				t:SetPoint("TOPLEFT", b, "TOPLEFT", 0, 0)
+			end
+			t:SetSize(tw, th)
+		end
+	end
+	for _, key in ipairs(light and LAYERED_LIGHT or LAYERED) do
+		local t = part(b, key)
+		if t and t.SetDrawLayer then t:SetDrawLayer("OVERLAY") end
+	end
+	-- under the icon: a plain dark slot (as on the game's other bars), or with Bar art ticked in /wbars the faint wing of
+	-- Action Bar 1 with its bar art (his "any way to turn the bar art off in wbars?", Nov 10)
+	local slot, back = part(b, "SlotArt"), part(b, "SlotBackground")
+	local barArt = DB and DB.barArt and true or false
+	if slot then slot:SetShown(barArt) end
+	if back then back:SetShown(not barArt) end
+	-- (the cooldowns: the library moves the swipe on each update; loss of control and charges scale for a wide key or a
+	-- smaller spot too, audit Nov 10)
+	local icon = b.icon
+	if type(icon) == "table" then
+		for i, c in ipairs(COOLDOWNS) do
+			local cd = (i == 1 or not light) and b[c[1]]
+			if type(cd) == "table" and cd.SetPoint then
+				cd:ClearAllPoints()
+				cd:SetPoint("TOPLEFT", icon, "TOPLEFT", c[2] * kx, -c[2] * ky)
+				cd:SetPoint("BOTTOMRIGHT", icon, "BOTTOMRIGHT", -c[2] * kx, c[2] * ky)
+			end
+		end
+	end
+end
+-- The colour, from your own Action Bar 1 buttons (BetterBlizzFrames' Dark Mode tint, or the game's own).
+local function copyColour(dst, src)
+	if not (dst and src) then return end
 	if dst.SetDesaturated and src.IsDesaturated then dst:SetDesaturated(src:IsDesaturated()) end
 	if dst.SetVertexColor and src.GetVertexColor then dst:SetVertexColor(src:GetVertexColor()) end
 end
+-- The game's pet button as the game had it, put back when it leaves its spot: its frame, glows, slots, cooldowns and colour
+-- (audit Nov 10: it kept WackyBars' colour until a reload). Taken once, before WackyBars changes anything on it.
+local SNAP_PARTS = { "NormalTexture", "PushedTexture", "HighlightTexture", "CheckedTexture", "Flash", "Border",
+	"NewActionTexture", "SpellHighlightTexture", "IconMask", "SlotArt", "SlotBackground" }
+local SNAP_SHOWN = { SlotArt = true, SlotBackground = true } -- (the game shows and hides the others itself)
+local function pointsOf(r)
+	local out = {}
+	for i = 1, (r.GetNumPoints and r:GetNumPoints() or 0) do
+		local a, rel, c, x, y = r:GetPoint(i)
+		out[i] = { a, rel, c, x, y }
+	end
+	return out
+end
+local function setPoints(r, list)
+	if #list == 0 then return end
+	r:ClearAllPoints()
+	for _, p in ipairs(list) do r:SetPoint(p[1], p[2], p[3], p[4], p[5]) end
+end
+local function snapArt(pb)
+	if pb.wbSnap then return end
+	local s = { parts = {}, cds = {} }
+	local nt, pt = part(pb, "NormalTexture"), part(pb, "PushedTexture")
+	s.normal = nt and nt.GetAtlas and nt:GetAtlas()
+	s.pushed = pt and pt.GetAtlas and pt:GetAtlas()
+	for _, key in ipairs(SNAP_PARTS) do
+		local t = part(pb, key)
+		if t then
+			local o = { points = pointsOf(t) }
+			o.w, o.h = t:GetSize()
+			if t.IsShown then o.shown = t:IsShown() and true or false end
+			if t.GetVertexColor then o.vc = { t:GetVertexColor() } end
+			if t.IsDesaturated then o.desat = t:IsDesaturated() and true or false end
+			if t.GetDrawLayer then o.layer, o.sub = t:GetDrawLayer() end
+			s.parts[key] = o
+		end
+	end
+	for _, c in ipairs(COOLDOWNS) do
+		local cd = pb[c[1]]
+		if type(cd) == "table" and cd.GetPoint then s.cds[c[1]] = pointsOf(cd) end
+	end
+	pb.wbSnap = s
+end
+local function restoreArt(pb)
+	local s = pb.wbSnap
+	if not s then return end
+	if type(s.normal) == "string" and pb.SetNormalAtlas then pb:SetNormalAtlas(s.normal) end
+	if type(s.pushed) == "string" and pb.SetPushedAtlas then pb:SetPushedAtlas(s.pushed) end
+	for key, o in pairs(s.parts) do
+		local t = part(pb, key)
+		if t then
+			setPoints(t, o.points)
+			if type(o.w) == "number" and o.w > 0 and type(o.h) == "number" and o.h > 0 then t:SetSize(o.w, o.h) end
+			if SNAP_SHOWN[key] and o.shown ~= nil then t:SetShown(o.shown) end
+			if o.vc and t.SetVertexColor then t:SetVertexColor(o.vc[1], o.vc[2], o.vc[3], o.vc[4]) end
+			if o.desat ~= nil and t.SetDesaturated then t:SetDesaturated(o.desat) end
+			if type(o.layer) == "string" and t.SetDrawLayer then t:SetDrawLayer(o.layer, o.sub) end
+		end
+	end
+	for key, list in pairs(s.cds) do
+		local cd = pb[key]
+		if type(cd) == "table" and cd.SetPoint then setPoints(cd, list) end
+	end
+end
 -- The look (his ask, Nov 10: "follow the theme of my desktop and the focus window bar thats like purple to pink gradient",
 -- "default and the thing i suggested"): Default copies your Action Bar 1 (BetterBlizzFrames' Dark Mode tint with it, as
--- before); Purple to pink colours each button's frame and empty slot with a slice of one gradient running across its bar,
+-- before); Purple to pink colours each button's frame (and its empty slot's wing with Bar art) with a slice of one gradient across its bar,
 -- #BD93F9 to #FF79C6 (his desktop's, the same as his mouse pointer). Set at each look update, no timer.
 local GRAD_FROM, GRAD_TO = { 0xBD / 255, 0x93 / 255, 0xF9 / 255 }, { 0xFF / 255, 0x79 / 255, 0xC6 / 255 }
 local function mix(t) return GRAD_FROM[1] + (GRAD_TO[1] - GRAD_FROM[1]) * t, GRAD_FROM[2] + (GRAD_TO[2] - GRAD_FROM[2]) * t,
@@ -441,45 +614,23 @@ local function gradOn(t, bar, b)
 	t:SetDesaturated(true) -- (the frame's own grey, so the colour reads true)
 	t:SetGradient("HORIZONTAL", CreateColor(r0, g0, b0, 1), CreateColor(r1, g1, b1, 1))
 end
--- b: a WackyBars button or a game pet button in a spot (its spot's bar).
+-- b: a WackyBars button or a game pet button in a spot: its spot's bar, and its spot's slice (the pet button is scaled
+-- into its spot, so its own left and width are in other units; audit Nov 10).
 tint = function(b, bar)
 	if not (DB and DB.look == "gradient") then return end
 	bar = bar or (b.wb and b.wb.bar) or (b.wbSpot and b.wbSpot.wb.bar)
 	if not bar then return end
-	gradOn(b:GetNormalTexture(), bar, b)
-	gradOn(b.SlotArt, bar, b)
+	local at = b.wbSpot or b
+	gradOn(part(b, "NormalTexture"), bar, at)
+	gradOn(part(b, "PushedTexture"), bar, at) -- (the pressed frame too: each press flashed the plain one; audit Nov 10)
+	gradOn(part(b, "SlotArt"), bar, at)
 end
--- The frame around the icon: the game's own proportions (ActionButtonTemplate: 46 by 45 on a 45 icon, pinned at the icon's
--- top left), whatever size Action Bar 1's has. His Action Bar 1 has a 51 frame on a 45 icon (his readout, Nov 10), so a
--- copied size sat loose and the icons looked small ("the spell icons dont fit"); copying its place too only moved the gap.
--- The art and colour still come from Action Bar 1.
-local function placeLike(dst, src, b)
-	if type(dst) ~= "table" or not (dst.ClearAllPoints and dst.SetPoint and dst.SetSize) then return end
-	local mine = (type(b.icon) == "table" and b.icon.GetWidth) and b.icon or b
-	local w, h = mine:GetWidth(), mine:GetHeight()
-	if type(w) ~= "number" or type(h) ~= "number" or w <= 0 or h <= 0 then w, h = b:GetWidth(), b:GetHeight() end
-	dst:ClearAllPoints()
-	dst:SetPoint("TOPLEFT", mine, "TOPLEFT", 0, 0)
-	dst:SetSize(w * 46 / 45, h)
-end
-local function lookOne(b, ref, rw, rh)
-	do
-		local fx = (rw and rw > 0) and (b:GetWidth() / rw) or 1
-		local fy = (rh and rh > 0) and (b:GetHeight() / rh) or 1
-
-		if ref.SlotArt and b.SlotArt then
-			b.SlotArt:SetShown(ref.SlotArt:IsShown())
-			copyTexture(b.SlotArt, ref.SlotArt, function(a) b.SlotArt:SetAtlas(a) end, fx, fy)
-		end
-		if ref.SlotBackground and b.SlotBackground then
-			b.SlotBackground:SetShown(ref.SlotBackground:IsShown())
-			copyTexture(b.SlotBackground, ref.SlotBackground, function(a) b.SlotBackground:SetAtlas(a) end, fx, fy)
-		end
-		copyTexture(b:GetNormalTexture(), ref:GetNormalTexture(), function(a) b:SetNormalAtlas(a) end, fx, fy)
-		copyTexture(b:GetPushedTexture(), ref:GetPushedTexture(), function(a) b:SetPushedAtlas(a) end, fx, fy)
-		placeLike(b:GetNormalTexture(), ref:GetNormalTexture(), b)
-		placeLike(b:GetPushedTexture(), ref:GetPushedTexture(), b)
-	end
+-- A button's colour: Action Bar 1's on the frame, the pressed look and both slots; Purple to pink (tint) goes on top.
+local function colourOne(b, ref)
+	copyColour(part(b, "NormalTexture"), part(ref, "NormalTexture"))
+	copyColour(part(b, "PushedTexture"), part(ref, "PushedTexture"))
+	copyColour(part(b, "SlotArt"), part(ref, "SlotArt"))
+	copyColour(part(b, "SlotBackground"), part(ref, "SlotBackground"))
 	tint(b)
 end
 -- The minimap's frame follows the look too (his ask, Nov 10: "any way we can match the look on the mini map to?"): the
@@ -500,12 +651,32 @@ local function mapTextures()
 	end
 	return out
 end
+-- (each part gets its slice of one gradient across the whole map, left to right, so the pieces of a border join up; audit
+-- Nov 10. A part whose place is not known yet gets the whole gradient.)
+local function mapSlices(list)
+	local lo, hi, at = math.huge, -math.huge, {}
+	for _, t in ipairs(list) do
+		local l, r = t.GetLeft and t:GetLeft(), t.GetRight and t:GetRight()
+		local p = t.GetParent and t:GetParent()
+		local s = p and p.GetEffectiveScale and p:GetEffectiveScale()
+		if type(l) == "number" and type(r) == "number" and type(s) == "number" and s > 0 and r > l then
+			at[t] = { l * s, r * s }
+			lo, hi = math.min(lo, l * s), math.max(hi, r * s)
+		end
+	end
+	for _, t in ipairs(list) do
+		local a = at[t]
+		t.wbSlice = (a and hi > lo) and { (a[1] - lo) / (hi - lo), (a[2] - lo) / (hi - lo) } or nil
+	end
+end
 local function mapOne(t)
 	mapBusy = true
 	if DB and DB.look == "gradient" then
+		local sl = t.wbSlice
+		local r0, g0, b0 = mix(sl and sl[1] or 0)
+		local r1, g1, b1 = mix(sl and sl[2] or 1)
 		t:SetDesaturated(true)
-		t:SetGradient("HORIZONTAL", CreateColor(GRAD_FROM[1], GRAD_FROM[2], GRAD_FROM[3], 1),
-			CreateColor(GRAD_TO[1], GRAD_TO[2], GRAD_TO[3], 1))
+		t:SetGradient("HORIZONTAL", CreateColor(r0, g0, b0, 1), CreateColor(r1, g1, b1, 1))
 		t.wbGrad = true
 	elseif t.wbGrad then
 		t.wbGrad = nil
@@ -517,7 +688,9 @@ local function mapOne(t)
 end
 local function mapLook()
 	if not CreateColor then return end
-	for _, t in ipairs(mapTextures()) do
+	local list = mapTextures()
+	if DB and DB.look == "gradient" then mapSlices(list) end
+	for _, t in ipairs(list) do
 		if not t.wbOrig and DB and DB.look == "gradient" then
 			local r, g, b = t:GetVertexColor()
 			t.wbOrig = { r or 1, g or 1, b or 1, (t.IsDesaturated and t:IsDesaturated()) and true or false }
@@ -539,8 +712,8 @@ local function matchLook()
 	mapLook()
 	local ref = _G.ActionButton1
 	if not ref then return end
-	local rw, rh = ref:GetWidth(), ref:GetHeight()
-	for _, b in ipairs(buttons) do lookOne(b, ref, rw, rh) end
+	-- (only the colour here: the art is laid out by layout and after each of the library's updates)
+	for _, b in ipairs(buttons) do colourOne(b, ref) end
 	-- the movement arrows (his ask, Nov 10: "gradient the arrows on the movement keys to"): their slice of the bar's
 	-- gradient, still at their faint 0.3; Default puts them back to plain grey
 	for _, bar in ipairs(wbBars) do
@@ -558,23 +731,10 @@ local function matchLook()
 			end
 		end
 	end
-	-- the game's pet buttons in WackyBars spots: the gradient, or back to Action Bar 1's tint (the game's look otherwise)
+	-- the game's pet buttons in WackyBars spots: Action Bar 1's colour like the buttons round them, the gradient on top
 	for n = 1, 10 do
 		local pb = _G["PetActionButton" .. n]
-		if pb and pb.wbSpot then
-			if DB and DB.look == "gradient" then
-				tint(pb)
-			else
-				for _, k in ipairs({ "GetNormalTexture", "SlotArt" }) do
-					local d = k == "SlotArt" and pb.SlotArt or pb:GetNormalTexture()
-					local s = k == "SlotArt" and ref.SlotArt or ref:GetNormalTexture()
-					if d and s and d.SetVertexColor and s.GetVertexColor then
-						d:SetVertexColor(s:GetVertexColor())
-						if d.SetDesaturated and s.IsDesaturated then d:SetDesaturated(s:IsDesaturated()) end
-					end
-				end
-			end
-		end
+		if pb and pb.wbSpot then colourOne(pb, ref) end
 	end
 end
 local lookQueued = false
@@ -609,45 +769,33 @@ local function measure()
 		if g >= 0 and g <= 16 then measured.gap = g * eff / base end
 	end
 end
--- A wide key: the mask, flash, borders and highlights stretch with it, and the icon is cropped to the wide shape (a middle
--- band of it) rather than squashed. Kept when the game sets a new icon.
+-- A wide key: its icon is cropped to the wide shape (a middle band of it) rather than squashed; the art stretches with it
+-- (art, above). Kept when the game sets a new icon.
 local function cropIcon(b)
 	local icon, w, h = b.icon, b:GetWidth(), b:GetHeight()
 	if not (type(icon) == "table" and icon.SetTexCoord and w and h and h > 0 and w > h) then return end
 	local band = h / w
 	icon:SetTexCoord(0, 1, 0.5 - band / 2, 0.5 + band / 2)
 end
-local function widen(b, w, h, size)
-	local k = w / size
-	if type(b.IconMask) == "table" then
-		b.IconMask:ClearAllPoints()
-		b.IconMask:SetAllPoints(b.icon or b)
-	end
-	for _, t in ipairs({ b.Flash, b.Border, b.SpellHighlightTexture, b.GetHighlightTexture and b:GetHighlightTexture(),
-		b.GetCheckedTexture and b:GetCheckedTexture() }) do
-		if type(t) == "table" and t.SetSize then
-			t:ClearAllPoints()
-			t:SetPoint("TOPLEFT", b, "TOPLEFT")
-			t:SetSize(46 * k * (size / 45), 45 * (h / 45))
-		end
-	end
+local function shape(b, light)
+	art(b, light)
 	cropIcon(b)
 	if type(b.icon) == "table" and not b.wbCropHooked then
 		b.wbCropHooked = true
 		hooksecurefunc(b.icon, "SetTexture", function() cropIcon(b) end)
 	end
 end
--- (after the library updates a button it has reset the glow and highlight sizes: WackyBars' own sizes go back on)
--- (also Action Bar 1's art, which the library swaps for its own on each update; audit Nov 10. Only shown buttons: the
--- library updates all of them at a loading screen or a vehicle, most on bars that are off)
+-- (after the library updates a button it has put its own lone-button frame back, shown or hidden its background and reset
+-- the glow sizes and the swipe: those and Action Bar 1's colour go back on. Only shown buttons: the library updates all of
+-- them at a loading screen or a vehicle, most on bars that are off; a button that comes on gets the library's update on
+-- show, and layout lays out every button)
 LAB.RegisterCallback(buttons, "OnButtonUpdate", function(_, b)
 	if not (b and b.wb and b:IsShown()) then return end
-	local wd = b.wbWiden
-	if wd then widen(b, wd[1], wd[2], wd[3]) end
+	shape(b, true)
 	local ref = _G.ActionButton1
-	if ref then lookOne(b, ref, ref:GetWidth(), ref:GetHeight()) end
-	-- (a hidden button shows faint while you edit keys; the library's update set it back to full)
-	if editing and b.wb and DB and DB.hidden[b.wb.id] then b:SetAlpha(0.35) end
+	if ref then colourOne(b, ref) end
+	-- (a hidden button, or a pet key's spot, shows faint while you edit keys; the library's update set it back to full)
+	if editing and b.wb and DB and (DB.hidden[b.wb.id] or b.wb.kind == "pet") then b:SetAlpha(0.35) end
 end)
 
 local function spotX(bar, S) return (bar.set.staggers and DB.stagger) and S.sx or S.x end
@@ -688,10 +836,10 @@ local function layout()
 		local k = S.small or 1
 		local w, h = bw * k, size * k
 		b:SetSize(w, h)
-		-- (every button, and again after each of the library's updates, which put the glow and highlight back at 46 x 45:
+		-- (every button, and again after each of the library's updates, which put its own frame and the 46 x 45 glow back:
 		-- Caps' glow covered only its left half; audit Nov 10)
-		b.wbWiden = { w, h, size }
-		widen(b, w, h, size)
+		b.wbSize = { w, h }
+		shape(b)
 		b:ClearAllPoints()
 		local ox = S.alignX == "right" and (bw - w) or (bw - w) / 2
 		local oy = (size - h) / 2
@@ -811,6 +959,7 @@ end
 -- with its Pet bar row (the whole bar is in holder 9 then: sortForQuietHUD). The game's pet bar is tucked away while any of its buttons is in a spot, and every button goes back when none is.
 -- Known gap: the tucked bar no longer turns a pet key's text red out of range.
 local petMoved, petTucked = {}, nil
+local PET_SHOW = "[petbattle][vehicleui][overridebar][possessbar] hide; [@pet,exists] show; hide"
 local function petHotkey(pb)
 	if not pb.wbHooked and pb.SetHotkeys then
 		pb.wbHooked = true
@@ -833,17 +982,13 @@ local function placePets()
 		local q = b.wb
 		if q.kind == "pet" and active(b) and not hiddenButton(b) and not want[q.pet] then want[q.pet] = b end
 	end
-	for _, bar in ipairs(wbBars) do
-		if not bar.petFrame.wbDriven then
-			bar.petFrame.wbDriven = true
-			RegisterStateDriver(bar.petFrame, "visibility", "[@pet,exists] show; hide")
-		end
-	end
-	local any = false
+	local any, withPets = false, {}
 	for n = 1, 10 do
 		local pb, b = _G["PetActionButton" .. n], want[n]
 		if pb and b then
 			any = true
+			withPets[b.wb.bar] = true
+			snapArt(pb) -- (once, before anything here changes it)
 			local h, pf = b.wb.bar.holders[9], b.wb.bar.petFrame
 			if pb:GetParent() ~= pf then pb:SetParent(pf) end
 			pb.wbBase = pb.wbBase or pb:GetHeight()
@@ -851,18 +996,39 @@ local function placePets()
 			pb:SetScale((bh and bh > 0 and pb.wbBase and pb.wbBase > 0) and bh / pb.wbBase or 1)
 			pb:ClearAllPoints()
 			pb:SetPoint("CENTER", b, "CENTER", 0, 0)
-			pb.wbSpot = b
+			pb.wbSpot, pb.wbPetArt = b, true
 			h.qhudButtons[#h.qhudButtons + 1] = pb
 			petHotkey(pb)
-			tint(pb)
+			-- (the same frame as the buttons round it: the game's pet button has the shadowed lone-button one; art review Nov 10)
+			art(pb)
+			-- (at full while you edit keys or move bars, like the buttons round it: showFull)
+			if pb.SetIgnoreParentAlpha then pb:SetIgnoreParentAlpha((editing or moving) and true or false) end
+			local ref = _G.ActionButton1
+			if ref then colourOne(pb, ref) else tint(pb) end
 			petMoved[n] = true
 		elseif pb and petMoved[n] then
-			petMoved[n], pb.wbSpot = nil, nil
+			petMoved[n], pb.wbSpot, pb.wbPetArt = nil, nil, nil
+			restoreArt(pb)
+			if pb.SetIgnoreParentAlpha then pb:SetIgnoreParentAlpha(false) end
 			pb:SetParent(pb.container or _G.PetActionBar or UIParent)
 			pb:SetScale(1)
 			pb:ClearAllPoints()
 			pb:SetPoint("CENTER")
 			if pb.SetHotkeys then pb:SetHotkeys() end
+		end
+	end
+	-- Each bar's pet frame shows with a pet, only while it holds a pet button (a state driver costs a check every 0.2 s:
+	-- nine of them ran on every character; audit Nov 10), and not on a vehicle, an override or possess bar or in a pet
+	-- battle, where the game's own pet bar is gone too (Bartender's rule).
+	for _, bar in ipairs(wbBars) do
+		local pf = bar.petFrame
+		if withPets[bar] and pf.wbDriven ~= PET_SHOW then
+			pf.wbDriven = PET_SHOW
+			RegisterStateDriver(pf, "visibility", PET_SHOW)
+		elseif not withPets[bar] and pf.wbDriven then
+			pf.wbDriven = nil
+			UnregisterStateDriver(pf, "visibility")
+			pf:Hide()
 		end
 	end
 	local bar = _G.PetActionBar
@@ -908,8 +1074,10 @@ local function apply()
 		-- a hidden button shows, faint, only while you edit keys (so you can right-click it back)
 		-- a button that shows nothing (its bar off, hidden, no slot, a key that moves you) is emptied too, so the library leaves
 		-- it out of its cooldown, usable and range passes (about 170 buttons, most on bars that are off; audit Nov 10)
-		-- (a hidden button with no slot still shows, faint and empty, while you edit keys, so you can right-click it back)
-		local hiddenEmpty = editing and hiddenButton(b) and not q.slot and barOn(q.bar) and not spotGone(q.spot)
+		-- (a hidden button with no slot still shows, faint and empty, while you edit keys, so you can right-click it back; a
+		-- pet key's spot too, under its pet button, so it can be hovered, given a key or hidden like any other; audit Nov 10)
+		local hiddenEmpty = editing and (hiddenButton(b) or q.kind == "pet") and not q.slot and barOn(q.bar)
+			and not spotGone(q.spot)
 		if hiddenEmpty then
 			b:Show()
 			b:SetAlpha(0.35)
@@ -981,9 +1149,11 @@ local function apply()
 		end
 	end
 	sortForQuietHUD()
-	if QuietHUD_RefreshBarClicks then QuietHUD_RefreshBarClicks() end -- (QuietHUD's Click through column, per game bar)
 	layout()
 	placePets()
+	-- (QuietHUD's Click through column and its mouse over hooks, per game bar: after the pet buttons joined holder 9, or
+	-- they missed QuietHUD's hover until the next loading screen; audit Nov 10)
+	if QuietHUD_RefreshBarClicks then QuietHUD_RefreshBarClicks() end
 	gameBars()
 	matchLook()
 	applying = false
@@ -1018,6 +1188,11 @@ end
 local function showFull(on)
 	for _, b in ipairs(buttons) do
 		if b.SetIgnoreParentAlpha then b:SetIgnoreParentAlpha(on and true or false) end
+	end
+	-- (the game's pet buttons in spots too: QuietHUD fades them with its Pet bar row; audit Nov 10)
+	for n = 1, 10 do
+		local pb = _G["PetActionButton" .. n]
+		if pb and pb.wbSpot and pb.SetIgnoreParentAlpha then pb:SetIgnoreParentAlpha(on and true or false) end
 	end
 	-- the movement arrows are textures in the faded holder: while editing or moving they sit on the bar itself (his Ctrl
 	-- bar's arrows were gone in Move bars, Nov 10)
@@ -1200,7 +1375,14 @@ local function sidesUI(f)
 	local l, b, w, h = f:GetRect()
 	if not (l and b and w and h) then return nil end
 	local k = f:GetEffectiveScale() / UIParent:GetEffectiveScale()
-	return l * k, (l + w) * k, b * k, (b + h) * k, k
+	-- (where the bar really is: without QuietHUD's pixel shift, or a nudge, a resize or a snap saved the shift into its
+	-- place, a few pixels more each time; audit Nov 10. While Move bars is open QuietHUD pauses the shift anyway.)
+	local dx, dy = 0, 0
+	if QuietHUD_ShiftOffset then
+		local ok, x, y = pcall(QuietHUD_ShiftOffset, f)
+		if ok and type(x) == "number" and type(y) == "number" then dx, dy = x, y end
+	end
+	return l * k - dx, (l + w) * k - dx, b * k - dy, (b + h) * k - dy, k
 end
 local function gridShown()
 	if inBlizzardEditMode then
@@ -1488,6 +1670,7 @@ local function stopModes()
 	hovered = nil
 	GameTooltip:Hide()
 	showFull(false)
+	if QuietHUD_ShiftPause then pcall(QuietHUD_ShiftPause, false) end -- (QuietHUD's pixel shift goes on again)
 	if wasEditing then apply() end
 end
 local function startEdit()
@@ -1511,6 +1694,9 @@ local function startMove()
 	end
 	stopModes()
 	moving = true
+	-- (QuietHUD's pixel shift puts the bars back at their places while you move them, as in Edit Mode: what you drop,
+	-- nudge or resize is never a shifted place; audit Nov 10)
+	if QuietHUD_ShiftPause then pcall(QuietHUD_ShiftPause, true) end
 	showFull(true)
 	for bar, m in pairs(movers) do
 		m:ClearAllPoints()
@@ -1600,7 +1786,7 @@ local function toggleOptions()
 		local framed = ok and w and w.SetTitle and type(w.Inset) == "table"
 		if ok and w and not framed then w:Hide() end
 		options = framed and w or CreateFrame("Frame", "WackyBarsOptions", UIParent)
-		options:SetSize(400, 84 + 4 * 26 + 56 + 26 + 30 + 30 + 30 + 144 + 50)
+		options:SetSize(400, 84 + 4 * 26 + 56 + 26 + 30 + 30 + 30 + 30 + 144 + 50)
 		options:SetPoint("CENTER")
 		options:SetFrameStrata("DIALOG")
 		options:SetClampedToScreen(true)
@@ -1708,8 +1894,14 @@ local function toggleOptions()
 		local lookCycle = button(150, below - 80, 160, "", function()
 			DB.look = (DB.look ~= "gradient") and "gradient" or nil
 			matchLook()
+			if refreshOptions then refreshOptions() end -- (its label: it kept the old look's name; audit Nov 10)
 		end)
 		controls[#controls + 1] = function() lookCycle:SetText(DB.look == "gradient" and "Purple to pink" or "Default") end
+		below = below - 30
+		-- Bar art: the faint wing in empty buttons, as on Action Bar 1 with its bar art; off (the default) a plain dark slot, as
+		-- on the game's other bars (his "any way to turn the bar art off in wbars?", Nov 10)
+		check(20, below - 82, "Bar art (the faint wing in empty buttons)", function() return DB.barArt end,
+			function(v) DB.barArt = v or nil end)
 		below = below - 30
 		-- Arrows: how strong the movement arrows are (his ask, Nov 10: "make that an option we can change"); one button cycles
 		-- the steps, 30% the default. QuietHUD's fade multiplies on top (30% at his 0.6 Shown is 18% on screen).

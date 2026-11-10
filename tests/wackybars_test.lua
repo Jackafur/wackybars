@@ -57,7 +57,25 @@ rawset(_G, "CreateFrame", function(kind, name, parent, template)
 		rawset(f, "icon", icon)
 		rawset(f, "SetIgnoreParentAlpha", function(s, v) s.__ignoreParentAlpha = v end)
 		rawset(f, "RegisterForClicks", function(s, ...) s.__clicks = { ... } end)
-		for _, k in ipairs({ "IconMask", "Flash", "Border", "SpellHighlightTexture" }) do rawset(f, k, M.newObj("Texture", nil, f)) end
+		-- the art, each part at the size the template leaves it (ActionButtonTemplate.xml): the frame 51 x 51 after the
+		-- template's own UpdateButtonArt for a lone button (the AddRow one, with the slot background up and the slot art
+		-- down), the glows 46 x 45, the icon mask at a made-up atlas size of 58
+		for k, s in pairs({ NormalTexture = { 51, 51 }, PushedTexture = { 51, 51 }, HighlightTexture = { 46, 45 },
+			CheckedTexture = { 46, 45 }, Flash = { 46, 45 }, Border = { 46, 45 }, NewActionTexture = { 46, 45 },
+			SpellHighlightTexture = { 46, 45 }, IconMask = { 58, 58 }, SlotArt = { 45, 45 }, SlotBackground = { 45, 45 } }) do
+			local t = M.newObj("Texture", nil, f)
+			t.__w, t.__h = s[1], s[2]
+			rawset(t, "GetSize", function(s2) return s2.__w, s2.__h end)
+			rawset(f, k, t)
+		end
+		f.SlotArt.__shown = false
+		for _, k in ipairs({ "NormalTexture", "PushedTexture", "HighlightTexture", "CheckedTexture" }) do
+			rawset(f, "Get" .. k, function(s) return rawget(s, k) end)
+		end
+		f.__normalAtlas, f.__pushedAtlas = "UI-HUD-ActionBar-IconFrame-AddRow", "UI-HUD-ActionBar-IconFrame-AddRow-Down"
+		rawset(f, "SetNormalAtlas", function(s, a) s.__normalAtlas = a end)
+		rawset(f, "SetPushedAtlas", function(s, a) s.__pushedAtlas = a end)
+		rawset(f, "cooldown", M.newObj("Cooldown", nil, f))
 	end
 	-- a moved frame: GetPoint gives where it was dropped
 	if kind == "Frame" and name and name:match("^WackyBars") then
@@ -192,9 +210,62 @@ check("Caps is two buttons wide and ends where A starts", _G.WackyBarsPlainCaps.
 local c = _G.WackyBarsPlainCaps.icon.__coord
 check("Caps' icon is cropped to the wide shape, not squashed", c and c[3] > 0.2 and c[4] < 0.8)
 local caps = _G.WackyBarsPlainCaps
-caps.Border:SetSize(46, 45)
+caps.HighlightTexture:SetSize(46, 45) -- (the library puts the mouse over glow back at 46 x 45 on each update)
 LibStub("LibActionButton-1.0").callbacks.OnButtonUpdate("OnButtonUpdate", caps)
-check("after a library update Caps' glow is two keys wide again", caps.Border.__w and caps.Border.__w > 46 * 1.5)
+check("after a library update Caps' glow is two keys wide again", caps.HighlightTexture.__w > 46 * 1.5
+	and caps.Border.__w > 46 * 1.5)
+do -- the art, laid out like the game's own bar buttons (his "icons are all cropped", "phantom bar behind", "the
+	-- highlight is off", Nov 10)
+	local w = _G.WackyBarsPlainW
+	local function at(t, rel)
+		local p = t.__points[1]
+		return #t.__points == 1 and p[1] == "TOPLEFT" and p[2] == rel and p[3] == "TOPLEFT" and p[4] == 0 and p[5] == 0
+	end
+	check("W's frame: Action Bar 1's with its bar art (not the shadowed AddRow), 46 x 45 at its top left", w.__normalAtlas
+		== "UI-HUD-ActionBar-IconFrame" and w.__pushedAtlas == "UI-HUD-ActionBar-IconFrame-Down" and at(w.NormalTexture, w)
+		and w.NormalTexture.__w == 46 and w.NormalTexture.__h == 45 and at(w.PushedTexture, w) and w.PushedTexture.__w == 46)
+	check("W's highlight and checked glow sit exactly on the frame (46 x 45 at its top left)", at(w.HighlightTexture, w)
+		and w.HighlightTexture.__w == 46 and w.HighlightTexture.__h == 45 and at(w.CheckedTexture, w)
+		and w.CheckedTexture.__w == 46 and w.CheckedTexture.__h == 45)
+	check("W's flash, border and spell glows at their own size at its top left", at(w.Flash, w) and w.Flash.__w == 46
+		and at(w.Border, w) and at(w.SpellHighlightTexture, w) and at(w.NewActionTexture, w))
+	local mp = w.IconMask.__points
+	check("W's icon mask keeps the game's size, centred on the icon (shrunk onto the icon it cropped them)", #mp == 1
+		and mp[1][1] == "CENTER" and mp[1][2] == w.icon and w.IconMask.__w == 58 and w.IconMask.__h == 58)
+	check("W's empty slot: plain dark (as the game's other bars), the bar art's faint wing hidden",
+		w.SlotArt.__shown == false and w.SlotBackground.__shown == true)
+	local cp = w.cooldown.__points
+	check("W's cooldown 3 in from the icon's edges, as the game's", #cp == 2 and cp[1][1] == "TOPLEFT" and cp[1][2] == w.icon
+		and cp[1][4] == 3 and cp[1][5] == -3 and cp[2][1] == "BOTTOMRIGHT" and cp[2][4] == -3 and cp[2][5] == 3)
+	local k = caps.__w / 45
+	check("Caps (two keys wide): frame, glow and mask stretch with it", math.abs(caps.NormalTexture.__w - 46 * k) < 0.01
+		and caps.NormalTexture.__h == 45 and math.abs(caps.HighlightTexture.__w - 46 * k) < 0.01
+		and math.abs(caps.IconMask.__w - 58 * k) < 0.01 and caps.IconMask.__h == 58)
+	local e1 = _G.WackyBarsMousePlainEdge1
+	check("E1 (75%): frame and mask at 75% of the game's", math.abs(e1.NormalTexture.__w - 46 * 0.75) < 0.01
+		and math.abs(e1.NormalTexture.__h - 45 * 0.75) < 0.01 and math.abs(e1.IconMask.__w - 58 * 0.75) < 0.01)
+	-- the library's update puts its lone-button frame (the one with the shadow) back and hides the slot of a filled button
+	w:SetNormalAtlas("UI-HUD-ActionBar-IconFrame-AddRow")
+	w.NormalTexture:SetSize(51, 51)
+	w.SlotBackground:Hide()
+	LibStub("LibActionButton-1.0").callbacks.OnButtonUpdate("OnButtonUpdate", w)
+	check("after a library update W has the game's bar frame back (no shadow box) and its slot", w.__normalAtlas
+		== "UI-HUD-ActionBar-IconFrame" and w.NormalTexture.__w == 46 and w.SlotBackground.__shown == true
+		and at(w.NormalTexture, w))
+	-- Bar art in /wbars: the game's faint wing in empty buttons instead of the plain dark slot
+	SlashCmdList.WACKYBARS("")
+	local box
+	for _, f in ipairs(M.frames) do
+		if f.__text == "Bar art (the faint wing in empty buttons)" and f.__points[1] then box = f.__points[1][2] end
+	end
+	if box and box.__scripts.OnClick then box.__scripts.OnClick(box) end
+	check("Bar art ticked in /wbars: the faint wing shows in W's slot, the plain slot hidden", box ~= nil
+		and DB.barArt == true and w.SlotArt.__shown == true and w.SlotBackground.__shown == false)
+	if box and box.__scripts.OnClick then box.__scripts.OnClick(box) end
+	check("... unticked: the plain dark slot again", DB.barArt == nil and w.SlotArt.__shown == false
+		and w.SlotBackground.__shown == true)
+	SlashCmdList.WACKYBARS("")
+end
 SlashCmdList.WACKYBARS("stagger")
 check("stagger: Q half a key right of 1", x("WackyBarsPlainQ") > x("WackyBarsPlain1") and DB.stagger == true)
 check("stagger: Caps still ends where A starts", math.abs(x("WackyBarsPlainCaps") + _G.WackyBarsPlainCaps.__w + 4 - x("WackyBarsPlainA")) < 0.01)
@@ -545,11 +616,42 @@ rawset(_G, "hooksecurefunc", function(t, name, fn)
 	rawset(t, name, function(...) if old then old(...) end fn(...) end)
 end)
 local petBar = M.newObj("Frame", "PetActionBar")
+local function petPart(pb, w, h, atlas)
+	local t = M.newObj("Texture", nil, pb)
+	t.__w, t.__h, t.__atlas = w, h, atlas
+	t.__points = { { "TOPLEFT", pb, "TOPLEFT", 0, 0 } }
+	rawset(t, "GetSize", function(s2) return s2.__w, s2.__h end)
+	rawset(t, "GetNumPoints", function(s2) return #s2.__points end)
+	rawset(t, "GetAtlas", function(s2) return s2.__atlas end)
+	rawset(t, "SetVertexColor", function(s2, r, g, b) s2.__vc = { r, g, b }; s2.__grad = nil end)
+	rawset(t, "GetVertexColor", function(s2) local v = s2.__vc or { 1, 1, 1 }; return v[1], v[2], v[3], 1 end)
+	rawset(t, "SetDesaturated", function(s2, v) s2.__desat = v end)
+	rawset(t, "IsDesaturated", function(s2) return s2.__desat end)
+	rawset(t, "SetGradient", function(s2, o, c0, c1) s2.__grad = { o, c0, c1 } end)
+	rawset(t, "GetDrawLayer", function() return "OVERLAY", 0 end)
+	return t
+end
 for n = 1, 10 do
 	local c = M.newObj("Frame", "PetActionBarButtonContainer" .. n, petBar)
 	local pb = M.newObj("CheckButton", "PetActionButton" .. n, c)
-	pb.__h = 30
+	pb.__w, pb.__h = 30, 30
 	rawset(pb, "container", c)
+	rawset(pb, "icon", M.newObj("Texture", nil, pb))
+	for k, v in pairs({ NormalTexture = { 35, 35, "UI-HUD-ActionBar-IconFrame-AddRow" }, PushedTexture = { 35, 35,
+		"UI-HUD-ActionBar-IconFrame-AddRow-Down" }, HighlightTexture = { 31.6, 30.9 }, CheckedTexture = { 31.6, 30.9 },
+		Flash = { 31.6, 30.9 }, Border = { 31.6, 30.9 }, NewActionTexture = { 31.6, 30.9 }, SpellHighlightTexture = { 31.6, 30.9 },
+		IconMask = { 45, 45 }, SlotArt = { 30, 30 }, SlotBackground = { 30, 30 } }) do
+		rawset(pb, k, petPart(pb, v[1], v[2], v[3]))
+	end
+	pb.IconMask.__points = { { "CENTER", pb.icon, "CENTER", 0, 0 } }
+	pb.SlotArt.__shown = false
+	pb.NormalTexture:SetVertexColor(0.3, 0.3, 0.3) -- (BetterBlizzFrames' dark on the game's pet bar)
+	for _, k in ipairs({ "NormalTexture", "PushedTexture", "HighlightTexture", "CheckedTexture" }) do
+		rawset(pb, "Get" .. k, function(s2) return rawget(s2, k) end)
+	end
+	rawset(pb, "SetNormalAtlas", function(s2, a) s2.NormalTexture.__atlas = a end)
+	rawset(pb, "SetPushedAtlas", function(s2, a) s2.PushedTexture.__atlas = a end)
+	rawset(pb, "SetIgnoreParentAlpha", function(s2, v) s2.__ignoreParentAlpha = v end)
 	local hk = M.newObj("FontString", nil, pb)
 	rawset(hk, "SetText", function(s, t) s.__text = t end)
 	rawset(pb, "HotKey", hk)
@@ -566,8 +668,54 @@ check("... sized to the spot, labelled like it, WackyBars' own button hidden, no
 pet1:SetHotkeys()
 check("... the game's key text is replaced again after a binding change", pet1.HotKey.__text == "1")
 check("... no override: the key stays the game's pet key", overrides["ALT-F1"] == nil)
-check("... they show only with a pet", drivers[_G.WackyBarsPetMouseAlt]
-	and drivers[_G.WackyBarsPetMouseAlt].visibility == "[@pet,exists] show; hide" and not drivers[_G.WackyBarsHoldMouseAlt9])
+check("... they show only with a pet, not on a vehicle, override or possess bar or in a pet battle",
+	drivers[_G.WackyBarsPetMouseAlt] and drivers[_G.WackyBarsPetMouseAlt].visibility
+	== "[petbattle][vehicleui][overridebar][possessbar] hide; [@pet,exists] show; hide" and not drivers[_G.WackyBarsHoldMouseAlt9])
+check("... and only the bar holding pet buttons runs that check (none on the others)", not (drivers[_G.WackyBarsPetPlain]
+	and drivers[_G.WackyBarsPetPlain].visibility) and not (drivers[_G.WackyBarsPetMousePlain]
+	and drivers[_G.WackyBarsPetMousePlain].visibility))
+do -- the game's pet button takes the frame of the buttons round it, scaled for its own 30 (art review Nov 10)
+	local k = 30 / 45
+	local nt = pet1.NormalTexture
+	local np = nt.__points[#nt.__points]
+	local mp = pet1.IconMask.__points[#pet1.IconMask.__points]
+	check("... the pet button gets the shadowless frame of its neighbours, 46 x 45 scaled to its 30, at its top left",
+		nt.__atlas == "UI-HUD-ActionBar-IconFrame" and math.abs(nt.__w - 46 * k) < 0.01 and math.abs(nt.__h - 30) < 0.01
+		and np[1] == "TOPLEFT" and np[2] == pet1 and pet1.PushedTexture.__atlas == "UI-HUD-ActionBar-IconFrame-Down")
+	check("... its icon mask the game's 45 size scaled to 30 (from WackyBars' own buttons, not its own 45), on the icon",
+		math.abs(pet1.IconMask.__w - 58 * k) < 0.01 and mp[1] == "CENTER" and mp[2] == pet1.icon)
+	check("... a plain dark slot like its neighbours (Bar art off)", pet1.SlotBackground.__shown == true and pet1.SlotArt.__shown == false)
+end
+rawset(_G, "CreateColor", function(r, g, b, a) return { r = r, g = g, b = b, a = a } end)
+DB.look = "gradient"
+SlashCmdList.WACKYBARS("status")
+do
+	local g = pet1.NormalTexture.__grad
+	local g2 = pet1.PushedTexture.__grad
+	-- (the spot's own left and width: the fake frames all sit at 0, so the slice is the whole bar's left end, never a
+	-- squashed or negative one from the pet button's scaled units)
+	check("Purple to pink: the pet button gets its spot's slice, its pressed frame too", g and g2 and g[2].r >= 0xBD / 255 - 0.01
+		and pet1.NormalTexture.__desat == true)
+end
+do -- (a stand-in Action Bar 1 for this one check, BetterBlizzFrames' dark on it; the look checks below make their own)
+	local ab = M.newObj("CheckButton", "ActionButton1")
+	ab.__w, ab.__h = 45, 45
+	local ref = petPart(ab, 51, 51, "UI-HUD-ActionBar-IconFrame-AddRow")
+	ref:SetVertexColor(0.2, 0.2, 0.2)
+	rawset(ab, "GetNormalTexture", function() return ref end)
+	DB.look = nil
+	SlashCmdList.WACKYBARS("status")
+	check("Default: the pet button takes Action Bar 1's colour like its neighbours, the gradient gone",
+		pet1.NormalTexture.__grad == nil and pet1.NormalTexture.__vc and pet1.NormalTexture.__vc[1] == 0.2)
+	rawset(_G, "ActionButton1", nil)
+end
+-- Edit keys: a pet key's spot shows faint under its pet button, so it can be hovered, given a key or hidden; both at full
+SlashCmdList.WACKYBARS("edit")
+check("Edit keys: the pet key's spot shows faint and empty (reachable), its pet button at full", petSpot.__shown == true
+	and math.abs(petSpot.__alpha - 0.35) < 0.01 and pet1.__ignoreParentAlpha == true)
+SlashCmdList.WACKYBARS("edit")
+check("... done editing: the spot hidden again, the pet button follows QuietHUD's fade again", petSpot.__shown == false
+	and pet1.__ignoreParentAlpha == false)
 local inHolder9 = {}
 for _, b in ipairs(_G.WackyBarsHoldMouseAlt9.qhudButtons) do inHolder9[b] = true end
 check("... the whole Alt mouse bar goes with QuietHUD's Pet bar row (holder 9): the pet buttons and the extra buttons",
@@ -581,6 +729,15 @@ binds["ALT-F1"], binds["ALT-F2"] = nil, nil
 M.fire("UPDATE_BINDINGS")
 check("pet keys unbound: the pet buttons and the game's pet bar are back", pet1:GetParent() == _G.PetActionBarButtonContainer1
 	and pet1.__scale == 1 and pet1.HotKey.__text == "game" and petBar:GetParent() == UIParent)
+do
+	local nt = pet1.NormalTexture
+	check("... the pet button has the game's own art and colour back (frame, mask, slots, BetterBlizzFrames' dark)",
+		nt.__atlas == "UI-HUD-ActionBar-IconFrame-AddRow" and nt.__w == 35 and nt.__h == 35 and pet1.IconMask.__w == 45
+		and pet1.SlotArt.__shown == false and pet1.SlotBackground.__shown == true and nt.__vc and nt.__vc[1] == 0.3
+		and nt.__grad == nil and pet1.PushedTexture.__atlas == "UI-HUD-ActionBar-IconFrame-AddRow-Down")
+	check("... and no bar runs the pet check any more", not (drivers[_G.WackyBarsPetMouseAlt]
+		and drivers[_G.WackyBarsPetMouseAlt].visibility) and _G.WackyBarsPetMouseAlt.__shown == false)
+end
 check("... and the Alt mouse bar follows the mouse bar's row again", _G.WackyBarsMouseAltEdge1:GetParent() ~= _G.WackyBarsHoldMouseAlt9
 	and #_G.WackyBarsHoldMouseAlt9.qhudButtons == 0)
 
@@ -596,12 +753,13 @@ local function tex()
 	return t
 end
 local ab1 = M.newObj("CheckButton", "ActionButton1")
+ab1.__w, ab1.__h = 45, 45 -- (his: 45, at Edit Mode's 100% icon size)
 local refTex, qTex = tex(), tex()
 refTex:SetVertexColor(0.2, 0.2, 0.2)
 rawset(ab1, "GetNormalTexture", function() return refTex end)
 for _, k in ipairs({ "SlotArt", "SlotBackground" }) do rawset(ab1, k, false) end
 rawset(ab1, "GetPushedTexture", function() return nil end)
--- (the fake buttons have no textures: every WackyBars button gets none, Q gets one below)
+-- (the other buttons' frames are the fake template's, which keep no colour; Q's records it, below)
 for _, v in pairs(_G) do
 	if type(v) == "table" and rawget(v, "wb") then
 		rawset(v, "GetNormalTexture", function() return nil end)
@@ -618,8 +776,18 @@ check("Default: the minimap ring is left alone", ring.__grad == nil and ring.__v
 local arrowT = _G.WackyBarsPlainS.wb.arrowTex
 rawset(arrowT, "SetGradient", function(s2, o, c0, c1) s2.__grad = { o, c0, c1 } end)
 rawset(arrowT, "SetVertexColor", function(s2, r) s2.__vc = r; s2.__grad = nil end)
+-- BetterBlizzFrames' classic minimap border in two pieces, left and right half of the map
+local mapL, mapR = tex(), tex()
+rawset(mapL, "GetLeft", function() return 0 end)
+rawset(mapL, "GetRight", function() return 50 end)
+rawset(mapR, "GetLeft", function() return 50 end)
+rawset(mapR, "GetRight", function() return 100 end)
+rawset(_G, "BBF", { classicMinimapTextures = { mapL, mapR } })
 DB.look = "gradient"
 SlashCmdList.WACKYBARS("status")
+check("Purple to pink: the minimap border's two pieces each get their half of one gradient (they join in the middle)",
+	mapL.__grad and mapR.__grad and math.abs(mapL.__grad[2].r - 0xBD / 255) < 0.01 and math.abs(mapR.__grad[3].b - 0xC6 / 255) < 0.01
+	and math.abs(mapL.__grad[3].g - mapR.__grad[2].g) < 0.001 and mapL.__grad[3].g < 0x93 / 255 - 0.01)
 check("Purple to pink: the movement arrows get their slice of the gradient", arrowT.__grad ~= nil and arrowT.__grad[1] == "HORIZONTAL")
 check("Purple to pink: the minimap ring gets the whole gradient", ring.__grad and math.abs(ring.__grad[2].r - 0xBD / 255) < 0.01
 	and math.abs(ring.__grad[3].b - 0xC6 / 255) < 0.01)
@@ -631,15 +799,16 @@ check("Purple to pink: Q's frame gets its slice of the bar's gradient (#BD93F9 a
 DB.look = nil
 SlashCmdList.WACKYBARS("status")
 check("Default: Q copies Action Bar 1's dark tint again", qTex.__grad == nil and qTex.__vc and qTex.__vc[1] == 0.2)
--- His Action Bar 1 (readout Nov 10): button 45, icon 45, frame 51. WackyBars' frame keeps the game's own proportions
--- around its icon instead: 46 by 45, pinned at the icon's top left.
+-- His Action Bar 1 (readout Nov 10): button 45, icon 45, frame 51 (Hide Bar Art on: the game's lone-button AddRow frame).
+-- WackyBars takes only its colour; the frame is the game's bar frame, 46 by 45 at the button's top left.
 refTex.__w, refTex.__h = 51, 51
-_G.WackyBarsPlainQ.icon.__w, _G.WackyBarsPlainQ.icon.__h = 45, 45
+rawset(refTex, "GetAtlas", function() return "UI-HUD-ActionBar-IconFrame-AddRow" end)
 SlashCmdList.WACKYBARS("status")
 local qp = qTex.__points[#qTex.__points]
-check(("Q's frame: the game's proportions on its icon (46 x 45 at its top left), not Action Bar 1's 51 (%s x %s)"):format(
-	tostring(qTex.__w), tostring(qTex.__h)), qp and qp[1] == "TOPLEFT" and qp[2] == _G.WackyBarsPlainQ.icon
-	and math.abs(qTex.__w - 46) < 0.01 and math.abs(qTex.__h - 45) < 0.01)
+check(("Q's frame: the game's bar frame, 46 x 45 at the button's top left, not Action Bar 1's 51 AddRow (%s x %s)"):format(
+	tostring(qTex.__w), tostring(qTex.__h)), qp and qp[1] == "TOPLEFT" and qp[2] == _G.WackyBarsPlainQ
+	and math.abs(qTex.__w - 46) < 0.01 and math.abs(qTex.__h - 45) < 0.01
+	and _G.WackyBarsPlainQ.__normalAtlas == "UI-HUD-ActionBar-IconFrame" and qTex.__vc and qTex.__vc[1] == 0.2)
 check("Default: the minimap ring has BetterBlizzFrames' latest dark back", ring.__grad == nil and ring.__vc[1] == 0.3)
 check("Default: the arrows plain grey again", arrowT.__grad == nil and arrowT.__vc == 1)
 check("arrows at 30% by default", math.abs(arrowT.__alpha - 0.3) < 0.01)

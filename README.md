@@ -29,6 +29,9 @@ Back to Default puts BetterBlizzFrames' own colours back at once, no reload. The
 **Arrows** (`/wbars`, one button): how strong the movement arrows are, 20, 30 (default), 50, 70 or 100%. QuietHUD's fade
 multiplies on top.
 
+**Bar art** (`/wbars`, a box, off by default): the faint wing in empty buttons, as on Action Bar 1 with its bar art. Off,
+an empty button is a plain dark slot, as on the game's other bars.
+
 **Pet keys:** a key bound to a pet bar key in Key Bindings (Alt + F1 to F10 on the Alt mouse bar, say) shows the game's own
 pet button for it: the right abilities for whatever pet is out, autocast and cooldowns as on the game's bar, shown only
 with a pet. The other buttons of that bar stay action buttons. While any pet button sits on a WackyBars bar the game's pet
@@ -41,7 +44,10 @@ blames WackyBars for a click, a hover in a fight or a stance change (the game's 
 Nov 10, did: audit of Nov 10). Action Bar 1's mirrors hold every page (state n = page n) and the pager uses Bartender's
 paging order (vehicle / override / possess / temporary shapeshift, then a picked page, then stance only on page 1). Keys
 WackyBars binds press buttons Bartender's way ("Keybind"), so key down casting works. Dragging follows the game's Lock
-Action Bars. Action Bar 1's art and tint are copied on (BetterBlizzFrames dark mode, or the game's own look without it).
+Action Bars. Each button is laid out like Action Bar 1's buttons with the bar art on (ActionButtonTemplate: the 46 x 45
+frame at the top left with no drop shadow, the icon mask at its own size, the highlight on the frame), scaled for a wide
+key or a smaller spot; only
+Action Bar 1's colour is copied on (BetterBlizzFrames dark mode, or the game's own look without it).
 
 **QuietHUD mirrors per bar.** Each bar holds eight small frames, `WackyBarsHold<bar><1 to 8>`, one per game bar, and the
 whole bar sits in the one of the game bar most of its buttons show slots of (keyboard: Bar 1, thumbs: Bar 4,
