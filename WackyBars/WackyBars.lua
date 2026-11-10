@@ -1101,7 +1101,7 @@ LAB.RegisterCallback(buttons, "OnButtonUpdate", function(_, b)
 	local ref = _G.ActionButton1
 	if ref then colourOne(b, ref) end
 	-- (a hidden button, or a pet key's spot, shows faint while you edit keys; the library's update set it back to full)
-	if editing and b.wb and DB and DB.hidden[b.wb.id] then b:SetAlpha(0.35) end
+	if editing and b.wb and DB and (DB.hidden[b.wb.id] or b.wb.kind == "pet") then b:SetAlpha(0.35) end
 end)
 
 local function spotX(bar, S) return (bar.set.staggers and DB.stagger) and S.sx or S.x end
@@ -1288,7 +1288,7 @@ local function placePets()
 		local q = b.wb
 		if q.kind == "pet" and active(b) and not hiddenButton(b) and not want[q.pet] then want[q.pet] = b end
 	end
-	local any, withPets = false, {}
+	local any, withPets, released = false, {}, false
 	for n = 1, 10 do
 		local pb, b = _G["PetActionButton" .. n], want[n]
 		if pb and b then
@@ -1305,6 +1305,14 @@ local function placePets()
 			pb:ClearAllPoints()
 			pb:SetPoint("CENTER", b, "CENTER", 0, 0)
 			pb.wbSpot, pb.wbPetArt = b, true
+			-- Shown whenever you have a pet, empty slots too, by the game's own state driver (it puts it back every fifth of a
+			-- second, in a fight too): the game shows and hides its pet buttons from its pet bar's code, which is tucked
+			-- away, so after a pet swap the buttons in spots stayed hidden (his "i swapped pets now all his abilities are
+			-- gone", Nov 10 night), and an empty slot (his pet's 9) went blank. Like a pet bar with its slots always shown.
+			if pb.wbDriven ~= PET_SHOW then
+				pb.wbDriven = PET_SHOW
+				RegisterStateDriver(pb, "visibility", PET_SHOW)
+			end
 			h.qhudButtons[#h.qhudButtons + 1] = pb
 			petHotkey(pb)
 			-- (the same frame as the buttons round it: the game's pet button has the shadowed lone-button one; art review Nov 10)
@@ -1316,6 +1324,12 @@ local function placePets()
 			petMoved[n] = true
 		elseif pb and petMoved[n] then
 			petMoved[n], pb.wbSpot, pb.wbPetArt = nil, nil, nil
+			if pb.wbDriven then -- (back to the game's own showing and hiding)
+				pb.wbDriven = nil
+				UnregisterStateDriver(pb, "visibility")
+				pb:SetAttribute("statehidden", nil)
+				released = true
+			end
 			restoreArt(pb)
 			pieOff(pb, true) -- (its dark pie back too)
 			if pb.SetIgnoreParentAlpha then pb:SetIgnoreParentAlpha(false) end
@@ -1325,6 +1339,10 @@ local function placePets()
 			pb:SetPoint("CENTER")
 			if pb.SetHotkeys then pb:SetHotkeys() end
 		end
+	end
+	-- (buttons given back: the game's pet bar works out again which of them show)
+	if released and _G.PetActionBar and _G.PetActionBar.UpdateShownButtons then
+		pcall(_G.PetActionBar.UpdateShownButtons, _G.PetActionBar)
 	end
 	-- Each bar's pet frame shows with a pet, only while it holds a pet button (a state driver costs a check every 0.2 s:
 	-- nine of them ran on every character; audit Nov 10), and not on a vehicle, an override or possess bar or in a pet
@@ -1384,14 +1402,13 @@ local function apply()
 		-- a button that shows nothing (its bar off, hidden, no slot, a key that moves you) is emptied too, so the library leaves
 		-- it out of its cooldown, usable and range passes (about 170 buttons, most on bars that are off; audit Nov 10)
 		-- (a hidden button with no slot still shows, faint and empty, while you edit keys, so you can right-click it back)
-		local hiddenEmpty = editing and hiddenButton(b) and not q.slot and barOn(q.bar) and not spotGone(q.spot)
-		-- A pet key's spot keeps an empty slot of its own under the game's pet button: the game hides its pet button when
-		-- that slot of the pet bar is empty (or no pet is out), and the spot went blank (his "9 disappeared from my wbars
-		-- petbar", Nov 10 night: his pet has nothing in slot 9). It is also how Edit keys reaches the spot (audit Nov 10).
-		local petMark = q.kind == "pet" and not hiddenButton(b) and barOn(q.bar) and not spotGone(q.spot)
-		if hiddenEmpty or petMark then
+		-- (a pet key's spot too, faint under its pet button, so Edit keys can reach it: the pet button is the game's, not in
+		-- WackyBars' list; audit Nov 10. Outside Edit keys the pet button shows by itself, empty slots too: placePets)
+		local hiddenEmpty = editing and (hiddenButton(b) or q.kind == "pet") and not q.slot and barOn(q.bar)
+			and not spotGone(q.spot)
+		if hiddenEmpty then
 			b:Show()
-			b:SetAlpha(hiddenEmpty and 0.35 or 1)
+			b:SetAlpha(0.35)
 			if tostring(b:GetAttribute("state")) ~= "0" then b:SetAttribute("state", "0") end
 			b:SetState("0", "empty")
 		elseif not q.slot or (hiddenButton(b) and not editing) or spotGone(q.spot) or not barOn(q.bar) then
