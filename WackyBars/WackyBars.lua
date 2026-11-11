@@ -2147,12 +2147,17 @@ local function toggleOptions()
 			t:SetText(s)
 			return t
 		end
+		-- (the window is as wide as its longest box label: his "probably fix width", Nov 11, when Ready shine's and Interrupt
+		-- nudge's ran out of it)
+		local widest = 400
 		local function check(x, y, label, get, set)
 			local c = CreateFrame("CheckButton", nil, options, "UICheckButtonTemplate")
 			c:SetPoint("TOPLEFT", x, y)
 			local t = options:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 			t:SetPoint("LEFT", c, "RIGHT", 2, 0)
 			t:SetText(label)
+			local cw, tw = c:GetWidth(), t:GetStringWidth()
+			if type(cw) == "number" and type(tw) == "number" then widest = math.max(widest, x + cw + 2 + tw + 24) end
 			c:SetScript("OnClick", function(self)
 				if InCombatLockdown() then
 					self:SetChecked(get())
@@ -2289,6 +2294,7 @@ local function toggleOptions()
 			check(20, below - 82, r.label, r.get, r.set)
 			below = below - 30
 		end
+		options:SetWidth(math.ceil(widest))
 		text(24, below - 88, "Size: Move bars, click a bar (each bar its own, like Edit Mode)", "GameFontHighlightSmall")
 		button(20, below - 110, 170, "Move bars", function() options:Hide() startMove() end)
 		button(200, below - 110, 170, "Edit keys", function() options:Hide() startEdit() end)
