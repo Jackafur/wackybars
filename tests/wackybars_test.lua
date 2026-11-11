@@ -1669,6 +1669,13 @@ do
 	check(("Warlock HUD's icons show the key: %s (plain keyboard), s%s (Shift keyboard, its modifier shown)"):format(plainKey,
 		shiftB.wb.spot.label), keyOn(main[1]) == plainKey and keyOn(util[1]) == "s" .. shiftB.wb.spot.label)
 	check("... a key bound to a game bar button that is no WackyBars spot: the game's key text", keyOn(buff[1]) == "CAPSLOCK")
+	rawset(buff[1], "__w", 10) -- (narrower than the key text: his "can we take this caps text off here")
+	M.fire("UPDATE_BINDINGS")
+	M.flushTimers()
+	check("... a key wider than its icon is left off (his Caps on Warlock HUD's small buff icons)", keyOn(buff[1]) == nil)
+	rawset(buff[1], "__w", nil)
+	M.fire("UPDATE_BINDINGS")
+	M.flushTimers()
 	check("... an icon whose picture is on no key shows none", keyOn(main[2]) == nil)
 	local _, fs = keyOn(main[1])
 	local ov = fs and fs.__parent

@@ -209,8 +209,16 @@ refresh = function()
 					if key then
 						local fs = labelFor(o, icon)
 						fs:SetText(key)
-						fs:SetShown(icon:IsShown())
-						labelOf[icon] = fs
+						-- a key wider than its icon is left off (his "can we take this caps text off here", Nov 11: Caps
+						-- spilled over the small icons of Warlock HUD's buff row)
+						local w, tw = icon:GetWidth(), fs:GetStringWidth()
+						if type(w) == "number" and type(tw) == "number" and not secret(w) and not secret(tw) and tw > w - 2 then
+							fs:Hide()
+							o.used = o.used - 1
+						else
+							fs:SetShown(icon:IsShown())
+							labelOf[icon] = fs
+						end
 					end
 				end
 			end
