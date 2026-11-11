@@ -1633,7 +1633,16 @@ do
 		return a, regions
 	end
 	local mainA, main = row({ 136197, 999 })
-	local utilA, util = row({ 136200 })
+	local utilA, util = row({ 136200, 135230 }) -- (135230: a Healthstone, for the sleeping bag below)
+	for _, t in ipairs(util) do rawset(t, "__w", 24) end
+	-- the sleeping bag (WhudBag.lua): Warlock HUD's stones, the bag's picture, not in your bags yet
+	local bagCount, bagAsked = 0, nil
+	local oldItem = C_Item
+	rawset(_G, "C_Item", setmetatable({
+		GetItemIconByID = function(id) return id == 5512 and 135230 or id == 211527 and 134400 or 1 end,
+		GetItemCount = function(id) return id == 211527 and bagCount or 0 end,
+		GetItemCooldown = function(id) bagAsked = id return 100, 3600 end,
+	}, { __index = oldItem }))
 	local buffA, buff = row({ 136300 }, true)
 	local rebuilt = false
 	local main2A, main2 = row({ 136200, 136197 })
@@ -1643,6 +1652,7 @@ do
 			return { main = mainA, utility = utilA, buffs = buffA }
 		end,
 		Rebuild = function() rebuilt = true return true end,
+		Stones = { { name = "Healthstone", ids = { 5512 } } },
 	})
 	-- (Warlock HUD's global that every rebuild of its own ends with)
 	rawset(_G, "WarlockHudRefreshNameplates", function() end)
@@ -1738,6 +1748,38 @@ do
 	M.fire("ACTIONBAR_SLOT_CHANGED", 2)
 	check("bindings or slots changing: worked out again once, a frame later", #M.timers == 1)
 	M.flushTimers()
+	do -- the sleeping bag on Warlock HUD (his "we should add sleeping bag to lockhud")
+		local function bagIcon()
+			for _, o in ipairs(M.frames) do
+				local p = o.__kind == "Frame" and o.__parent == utilA and o.__points[1]
+				if p and p[2] == utilA and p[4] ~= 0 and not rawget(o, "labels") and o.__w == 24 then return o, p end
+			end
+		end
+		local h = bagIcon()
+		check("sleeping bag: not in your bags, nothing on Warlock HUD", not (h and h.__shown))
+		bagCount = 1
+		M.fire("BAG_UPDATE_DELAYED")
+		local p
+		h, p = bagIcon()
+		check("in your bags: an icon on the stones' row, the stones' size, beside them (right end: they are not leftmost)",
+			h and h.__shown and p[1] == "CENTER" and p[4] == 40 * 2 + 24 + 1)
+		check("... with the bag's cooldown asked for, and Warlock HUD's icons left where they were",
+			bagAsked == 211527 and #util[1].__points == 1 and #util[2].__points == 1 and next(utilA.__scripts) == nil)
+		SlashCmdList.WACKYBARS("bag")
+		check("/wbars bag switches it off", not h.__shown and DB.whudBag == false)
+		SlashCmdList.WACKYBARS("bag")
+		check("... and on again", h.__shown and DB.whudBag == nil)
+		-- the stones leftmost (his order): the bag goes left of them
+		util[2].__points = { { "CENTER", utilA, "CENTER", 0, 0 } }
+		WarlockHudAPI.Rebuild()
+		h, p = bagIcon()
+		check("stones at the row's left end (his order): the bag goes left of them", h and p[4] == -(24 + 1))
+		bagCount = 0
+		M.fire("BAG_UPDATE_DELAYED")
+		check("out of your bags: gone", not h.__shown)
+		M.flushTimers()
+	end
+	rawset(_G, "C_Item", oldItem)
 	rawset(_G, "WarlockHudAPI", nil)
 	rawset(_G, "WarlockHudRefreshNameplates", nil)
 end
