@@ -1791,6 +1791,118 @@ do
 	rawset(_G, "WarlockHudRefreshNameplates", nil)
 end
 
+-- Ready shine (Ready.lua, his "probably do fear and other big spells"): a big cooldown's button shines once when its sweep
+-- ends, a sweep under 3 seconds (the global cooldown) never; Interrupt nudge (Nudge.lua, his "maybe this to if its legal"):
+-- your enemy target's cast makes the buttons that can stop it pulse until it ends.
+do
+	local now = 0
+	local oldTime = GetTime
+	rawset(_G, "GetTime", function() return now end)
+	local info, spells = {}, { [17926] = "Death Coil", [686] = "Shadow Bolt", [19244] = "Spell Lock" }
+	rawset(_G, "GetActionInfo", function(slot) local i = info[slot] if i then return i[1], i[2], i[3] end end)
+	C_Spell.GetSpellName = function(id) return spells[id] end
+	local picked, seen = {}, {}
+	for _, v in ipairs(M.frames) do
+		if rawget(v, "wb") and v.__shown and v.wb.bar.frame.__shown and #picked < 3 then
+			local kind, slot = v:GetAction()
+			if kind == "action" and type(slot) == "number" and not seen[slot] then
+				seen[slot] = true
+				picked[#picked + 1] = v
+			end
+		end
+	end
+	local A, C, S = picked[1], picked[2], picked[3]
+	local function slotOf(b) return select(2, b:GetAction()) end
+	info[slotOf(A)], info[slotOf(C)], info[slotOf(S)] = { "spell", 17926 }, { "spell", 686 }, { "macro", 1, "spell" }
+	info[slotOf(S)] = { "macro", 19244, "spell" } -- (a macro casting Spell Lock)
+	-- (fresh sweeps on the three buttons: the ones made at load were followed before this test's hooks existed)
+	for _, b in ipairs({ A, C, S }) do rawset(b, "cooldown", M.newObj("Cooldown", nil, b)) end
+	SlashCmdList.WACKYBARS("status")
+	local function glowOn(b)
+		for _, o in ipairs(M.frames) do
+			if o.__kind == "Frame" and o.__parent == b then
+				for _, t in ipairs(M.frames) do
+					if t.__kind == "CreateTexture" and t.__parent == o and t.__atlas == "UI-HUD-ActionBar-IconFrame-Mouseover" then
+						local g = groupOf(t)
+						if g and g.__playing then return o, t, g end
+					end
+				end
+			end
+		end
+	end
+	local function stopAll()
+		for _, o in ipairs(M.frames) do if o.__kind == "CreateAnimationGroup" then rawset(o, "__playing", false) end end
+	end
+	stopAll()
+	-- the global cooldown: 1.5 s, then cleared
+	A.cooldown:SetCooldown(0, 1.5)
+	now = 1.5
+	A.cooldown:Clear()
+	check("Ready shine: the global cooldown ending lights nothing", not glowOn(A))
+	-- Death Coil cast: a 2 minute sweep, then cleared when it is back
+	now = 10
+	A.cooldown:SetCooldown(10, 120)
+	A.cooldown:SetCooldown(10, 120) -- (the button sets it again and again: the start stays)
+	C.cooldown:SetCooldown(10, 8)
+	now = 130
+	A.cooldown:Clear()
+	C.cooldown:Clear()
+	local _, tex, g = glowOn(A)
+	check("Death Coil comes back after 2 minutes: its button shines once (the game's highlight, tinted, not looping)",
+		g ~= nil and g.__loop ~= "REPEAT" and tex.__grad ~= nil and tex.__blend == "ADD")
+	check("... Shadow Bolt's sweep ending lights nothing (not a big spell)", not glowOn(C))
+	-- the copy of the sweep running out (the button never cleared its own): the same
+	stopAll()
+	now = 200
+	A.cooldown:SetCooldown(200, 120)
+	now = 320
+	local mirror
+	for _, o in ipairs(M.frames) do
+		if o.__kind == "Cooldown" and o.__parent == A and o.__scripts.OnCooldownDone then mirror = o end
+	end
+	if mirror then mirror.__scripts.OnCooldownDone(mirror) end
+	check("... also when WackyBars' own copy of the sweep runs out first, and only once", glowOn(A) ~= nil)
+	stopAll()
+	A.cooldown:Clear()
+	check("... (the button's clear right after shines nothing more)", not glowOn(A))
+	DB.noReady = true
+	now = 400
+	A.cooldown:SetCooldown(400, 120)
+	now = 520
+	A.cooldown:Clear()
+	check("... the box in /wbars unticked: nothing shines", not glowOn(A))
+	DB.noReady = nil
+	-- Interrupt nudge
+	stopAll()
+	local enemy = true
+	rawset(_G, "UnitCanAttack", function() return enemy end)
+	M.fire("UNIT_SPELLCAST_START", "target")
+	check("Interrupt nudge: your enemy target starts a cast: Death Coil and the Spell Lock macro pulse, Shadow Bolt doesn't",
+		glowOn(A) ~= nil and glowOn(S) ~= nil and not glowOn(C))
+	local _, _, ng = glowOn(A)
+	check("... looping, like Panic flash", ng and ng.__loop == "REPEAT")
+	M.fire("UNIT_SPELLCAST_STOP", "target")
+	check("... the cast ends: they stop", not glowOn(A) and not glowOn(S))
+	M.fire("UNIT_SPELLCAST_CHANNEL_START", "target")
+	M.fire("PLAYER_TARGET_CHANGED")
+	check("... a channel, then you change target: they stop", not glowOn(A))
+	M.fire("UNIT_SPELLCAST_START", "focus")
+	check("... another unit's cast: nothing", not glowOn(A))
+	enemy = false
+	M.fire("UNIT_SPELLCAST_START", "target")
+	check("... a friendly target's cast: nothing", not glowOn(A))
+	enemy = true
+	DB.noNudge = true
+	M.fire("UNIT_SPELLCAST_START", "target")
+	check("... the box in /wbars unticked: nothing", not glowOn(A))
+	DB.noNudge = nil
+	M.fire("UNIT_SPELLCAST_START", "target")
+	M.fire("PLAYER_REGEN_ENABLED")
+	check("... the fight ends: they stop", not glowOn(A))
+	rawset(_G, "UnitCanAttack", nil)
+	rawset(_G, "GetTime", oldTime)
+end
+
 objMt.__index = baseIndex -- (the fake game as it was)
 check("saved bindings never written", written == 0)
 check("no errors", #M.errors == 0)

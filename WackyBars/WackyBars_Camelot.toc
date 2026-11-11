@@ -14,5 +14,7 @@ WackyBars.lua
 Ding.lua
 Profiles.lua
 Panic.lua
+Ready.lua
+Nudge.lua
 WhudBag.lua
 WhudKeys.lua

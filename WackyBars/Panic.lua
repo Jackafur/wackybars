@@ -77,6 +77,8 @@ local function actionName(slot)
 	end
 end
 
+wb.actionName = actionName -- (Ready shine and Interrupt nudge go by names too)
+
 -- A button's pulse: a frame on the button (so it fades with its bar) whose opacity the game sets from your health, holding
 -- the highlight that pulses.
 local pulses = {}
