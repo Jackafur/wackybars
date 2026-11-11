@@ -13,6 +13,9 @@
 -- follows when Warlock HUD changes one's picture or shows or hides it).
 -- Cost: nothing without Warlock HUD. With it nothing runs on its own: the keys are worked out again a frame after a change
 -- (your bindings, an action slot, WackyBars' bars, Warlock HUD rebuilding its rows or changing an icon's picture).
+-- Warlock HUD rebuilds its rows by itself too, on a pet summoned (his "the binds are gone on whud" after swapping Imp and
+-- Voidwalker, Nov 10 night), a spec profile, after a fight; every rebuild ends with its WarlockHudRefreshNameplates (called
+-- only there and once at its login), so the keys follow that call.
 local _, ns = ...
 local wb = ns and ns.wb
 if not wb then return end
@@ -75,9 +78,10 @@ local function macroSpells(body)
 	end
 	return n
 end
--- How much a slot stands for the picture it shows: 0 the spell or item itself, 1 a macro that casts only one spell (his
--- Agony macro on 1), 2 any other macro (his Spam macro on Shift + wheel up, showing whatever it casts next). His "the
--- ability you marked as swu is actually 1", then "its still sWU" (Nov 10 night: both are macros).
+-- How much a slot stands for the picture it shows: 0 the spell or item itself, 1 a macro that casts only one spell, 2 any
+-- other macro (a cast sequence showing whatever it casts next). His "the ability you marked as swu is actually 1", then
+-- "its still sWU" (Nov 10 night): his Agony macro on 1 and his Spam macro on Shift + wheel up both cast
+-- only Bane of Agony, so the key without Shift, Ctrl or Alt decides.
 local function rankOf(slot)
 	local ok, kind, id = pcall(GetActionInfo, slot)
 	if not ok or secret(kind) then return 2 end
@@ -229,6 +233,7 @@ events:SetScript("OnEvent", function(_, event)
 	local api = WarlockHudAPI
 	if type(api) ~= "table" or type(api.GetDemoAnchors) ~= "function" then return end
 	if type(api.Rebuild) == "function" then hooksecurefunc(api, "Rebuild", queue) end
+	if type(WarlockHudRefreshNameplates) == "function" then hooksecurefunc(_G, "WarlockHudRefreshNameplates", queue) end
 	for _, e in ipairs({ "PLAYER_ENTERING_WORLD", "UPDATE_BINDINGS", "ACTIONBAR_SLOT_CHANGED", "SPELLS_CHANGED",
 		"ACTIVE_TALENT_GROUP_CHANGED", "PLAYER_TALENT_UPDATE", "PLAYER_REGEN_ENABLED" }) do
 		events:RegisterEvent(e)

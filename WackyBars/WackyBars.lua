@@ -2292,6 +2292,9 @@ local function toggleOptions()
 		text(24, below - 88, "Size: Move bars, click a bar (each bar its own, like Edit Mode)", "GameFontHighlightSmall")
 		button(20, below - 110, 170, "Move bars", function() options:Hide() startMove() end)
 		button(200, below - 110, 170, "Edit keys", function() options:Hide() startEdit() end)
+		-- (his "fine then make a button that does it", Nov 10 night: the demon that is out gets its missing abilities and
+		-- commands back into its empty pet slots; ns.wb.fillPet, end of this file)
+		button(200, below - 144, 170, "Fill empty pet slots", function() if ns.wb.fillPet then ns.wb.fillPet() end end)
 		button(20, below - 144, 170, "Reset places", function()
 			if InCombatLockdown() then say("after the fight.") return end
 			DB.pos, DB.sizes = {}, {}
@@ -2505,3 +2508,175 @@ ns.wb = {
 	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {},
 	port = port, -- (Profiles.lua: a profile that switches bars on or off hands out spare slots as the bar boxes do)
 }
+
+-- Fill empty pet slots (his "fine then make a button that does it", Nov 10 night). Each demon keeps its own pet bar in the
+-- game; his Imp's held only Phase Shift (the game's own data, read the same night: Voidwalker 9 of 10 slots, Imp 1), so its
+-- spots on the Alt mouse bar stayed empty. The button (and /wbars fillpet) does what dragging from the spellbook's Pet tab
+-- does, for the demon that is out: each ability and command in its spellbook that is not on its pet bar goes into an empty
+-- slot. A command goes to the slot it has on your other demons (remembered whenever a demon is out: his Voidwalker has
+-- Attack in 7, Follow in 8, Move To in 9), so it stays on the same key; the abilities go to the empty slots on your WackyBars
+-- spots first, then the others. Nothing on the bar moves, and it says what went where and what did not fit. Out of a fight,
+-- with nothing on the cursor. Cost: the remembering reads ten slots a second after the pet bar changes; nothing else runs.
+;(function()
+	local TOKENS = { "PET_ACTION_ATTACK", "PET_ACTION_FOLLOW", "PET_ACTION_MOVE_TO", "PET_ACTION_WAIT", "PET_MODE_ASSIST",
+		"PET_MODE_DEFENSIVEASSIST", "PET_MODE_DEFENSIVE", "PET_MODE_AGGRESSIVE", "PET_MODE_PASSIVE" }
+	local function hidden(v) return issecretvalue and issecretvalue(v) or false end
+	-- the command a pet spellbook entry is, by its name in your game's language (the game's own strings for them)
+	local function tokenOf(name)
+		for _, t in ipairs(TOKENS) do
+			if type(_G[t]) == "string" and _G[t] == name then return t end
+		end
+	end
+	local function memory()
+		local DB = ns.wb.db()
+		if not DB then return {} end
+		DB.petSlots = type(DB.petSlots) == "table" and DB.petSlots or {}
+		return DB.petSlots
+	end
+	-- remembering where each command sits, whenever a demon is out
+	local function learn()
+		if not (PetHasActionBar and PetHasActionBar()) then return end
+		local mem = memory()
+		for i = 1, 10 do
+			local name, _, isToken = GetPetActionInfo(i)
+			if isToken and type(name) == "string" and not hidden(name) then mem[name] = i end
+		end
+	end
+	local watch = CreateFrame("Frame")
+	watch:RegisterEvent("PET_BAR_UPDATE")
+	watch:RegisterEvent("UNIT_PET")
+	watch:RegisterEvent("PLAYER_ENTERING_WORLD")
+	local queued = false
+	watch:SetScript("OnEvent", function(_, event, unit)
+		if (event == "UNIT_PET" and unit ~= "player") or queued then return end
+		queued = true
+		C_Timer.After(1, function() queued = false learn() end)
+	end)
+
+	local askedAt -- (when it last asked for a set-up demon first: pressing again soon after fills anyway)
+	ns.wb.fillPet = function()
+		local say = ns.wb.say
+		if InCombatLockdown() then say("after the fight.") return end
+		if not (PetHasActionBar and PetHasActionBar()) then say("no pet out (or it has no pet bar).") return end
+		if GetCursorInfo() then say("put down what is on your cursor first.") return end
+		local SB, bank = C_SpellBook, Enum and Enum.SpellBookSpellBank and Enum.SpellBookSpellBank.Pet
+		local types = Enum and Enum.SpellBookItemType
+		if not (SB and SB.HasPetSpells and SB.GetSpellBookItemInfo and SB.PickupSpellBookItem and bank and types
+			and PickupPetAction) then
+			say("this game version can't fill the pet bar.") return
+		end
+		learn()
+		-- the bar now: its empty slots, the commands on it, its abilities' spell ids and names
+		local free, onBar = {}, {}
+		local empty = 0
+		for i = 1, 10 do
+			local name, _, isToken, _, _, _, spellID = GetPetActionInfo(i)
+			if hidden(name) then say("the game hides the pet bar right now; try again in a moment.") return end
+			if name == nil then
+				free[i], empty = true, empty + 1
+			elseif isToken then
+				onBar[name] = true
+			else
+				if spellID then onBar["spell:" .. tostring(spellID)] = true end
+				onBar["name:" .. tostring(name):lower()] = true
+			end
+		end
+		if empty == 0 then say("this pet's bar is full.") return end
+		local AB, PI = C_ActionBar, C_PetInfo
+		local function there(info, token)
+			if info.itemType == types.PetAction and AB and AB.GetPetActionPetBarIndices then
+				local ok, idx = pcall(AB.GetPetActionPetBarIndices, info.actionID)
+				if ok and type(idx) == "table" and not hidden(idx) and #idx > 0 then return true end
+			end
+			if token then return onBar[token] == true end
+			return onBar["spell:" .. tostring(info.spellID)] or onBar["spell:" .. tostring(info.actionID)]
+				or onBar["name:" .. tostring(info.name):lower()] or false
+		end
+		local function passive(info)
+			if info.isPassive then return true end
+			if info.itemType == types.PetAction and PI and PI.IsPetActionPassive then
+				local ok, p = pcall(PI.IsPetActionPassive, info.actionID)
+				return ok and p == true
+			end
+			return false
+		end
+		-- what the pet has and the bar doesn't: commands, and its abilities in its spellbook's order
+		local commands, spells = {}, {}
+		for i = 1, (SB.HasPetSpells() or 0) do
+			local ok, info = pcall(SB.GetSpellBookItemInfo, i, bank)
+			if ok and type(info) == "table" and (info.itemType == types.PetAction or info.itemType == types.Spell)
+				and type(info.name) == "string" and not passive(info) then
+				local t = tokenOf(info.name)
+				if not there(info, t) then
+					local e = { index = i, token = t, name = info.name }
+					if t then commands[#commands + 1] = e else spells[#spells + 1] = e end
+				end
+			end
+		end
+		if #commands + #spells == 0 then say("nothing missing: everything this pet has is on its bar.") return end
+		local mem = memory()
+		local known = false
+		for _, e in ipairs(commands) do if mem[e.token] then known = true end end
+		if #commands > 0 and not known and not (askedAt and GetTime() - askedAt < 15) then
+			askedAt = GetTime()
+			say("no pet bar remembered yet. Summon a pet whose bar is set up (your Voidwalker) once, then this one, and press"
+				.. " again: its Attack, Follow and Move To then land on the same keys. Or press again now to fill in order.")
+			return
+		end
+		askedAt = nil
+		local placed, failed, noKey = {}, {}, {}
+		-- false: that slot is taken after all (never swap one off), try another; true: done with this one, placed or not
+		local function put(e, slot)
+			if (GetPetActionInfo(slot)) ~= nil then -- (WackyBars has a select of its own: not the game's)
+				free[slot] = nil
+				return false
+			end
+			SB.PickupSpellBookItem(e.index, bank)
+			if not GetCursorInfo() then failed[#failed + 1] = e.name return true end
+			PickupPetAction(slot)
+			free[slot] = nil
+			if GetCursorInfo() then -- (the game kept it on the cursor: not placed)
+				ClearCursor()
+				failed[#failed + 1] = e.name
+				return true
+			end
+			placed[#placed + 1] = e.name
+			local pb = _G["PetActionButton" .. slot]
+			if not (pb and pb.wbSpot) then noKey[#noKey + 1] = e.name .. " (slot " .. slot .. ")" end
+			return true
+		end
+		-- a command to the slot it has on your other pets, when that slot is empty
+		local rest = {}
+		for _, e in ipairs(commands) do
+			local slot = mem[e.token]
+			if not (slot and free[slot] and put(e, slot)) then rest[#rest + 1] = e end
+		end
+		-- then the abilities, then the commands whose slot was taken: the empty slots on your WackyBars spots first
+		local queue = {}
+		for _, e in ipairs(spells) do queue[#queue + 1] = e end
+		for _, e in ipairs(rest) do queue[#queue + 1] = e end
+		local order = {}
+		for pass = 1, 2 do
+			for i = 1, 10 do
+				local pb = _G["PetActionButton" .. i]
+				if free[i] and ((pb and pb.wbSpot) and 1 or 2) == pass then order[#order + 1] = i end
+			end
+		end
+		local noRoom = {}
+		for _, e in ipairs(queue) do
+			local done = false
+			for _, slot in ipairs(order) do
+				if free[slot] then done = put(e, slot) end
+				if done then break end
+			end
+			if not done then noRoom[#noRoom + 1] = e.name end
+		end
+		local msg = ("filled %d empty pet slot%s: %s."):format(#placed, #placed == 1 and "" or "s",
+			#placed > 0 and table.concat(placed, ", ") or "none")
+		if #noKey > 0 then msg = msg .. " On no key of yours: " .. table.concat(noKey, ", ") .. "." end
+		if #noRoom > 0 then msg = msg .. " No room left for: " .. table.concat(noRoom, ", ") .. "." end
+		if #failed > 0 then msg = msg .. " The game would not place: " .. table.concat(failed, ", ") .. "." end
+		say(msg)
+	end
+	ns.wb.slash.fillpet = function() ns.wb.fillPet() end
+end)()

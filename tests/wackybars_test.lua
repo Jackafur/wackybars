@@ -736,6 +736,111 @@ check("... the plain mouse bar still goes with its own row", _G.WackyBarsMousePl
 check("pet slot 3 has no key here: stays in the game's bar", _G.PetActionButton3:GetParent() == _G.PetActionBarButtonContainer3)
 check("the other Alt mouse spots stay action buttons", _G.WackyBarsMouseAltSide11.wb.kind ~= "pet" and _G.WackyBarsMouseAltEdge1.wb.kind ~= "pet")
 check("the game's pet bar is tucked away", petBar:GetParent() ~= UIParent)
+-- Fill empty pet slots (his "fine then make a button that does it", Nov 10 night): his Voidwalker's bar is set up, his Imp's
+-- held only Phase Shift. The button fills the Imp's empty slots from its spellbook the way dragging does: commands on the
+-- keys they have on the Voidwalker, abilities on the spots first, nothing moved, and it says what did not fit.
+do
+	local saved, names = {}, { "PetHasActionBar", "GetPetActionInfo", "GetCursorInfo", "ClearCursor", "PickupPetAction",
+		"C_SpellBook", "C_ActionBar", "C_PetInfo", "PET_ACTION_ATTACK", "PET_ACTION_FOLLOW", "PET_ACTION_MOVE_TO",
+		"PET_ACTION_WAIT", "PET_MODE_ASSIST", "PET_MODE_DEFENSIVEASSIST", "PET_MODE_PASSIVE" }
+	for _, k in ipairs(names) do saved[k] = rawget(_G, k) end
+	local savedEnum = rawget(_G, "Enum")
+	local STR = { PET_ACTION_ATTACK = "Attack", PET_ACTION_FOLLOW = "Follow", PET_ACTION_MOVE_TO = "Move To",
+		PET_ACTION_WAIT = "Stay", PET_MODE_ASSIST = "Assist", PET_MODE_DEFENSIVEASSIST = "Defensive", PET_MODE_PASSIVE = "Passive" }
+	for k, v in pairs(STR) do rawset(_G, k, v) end
+	-- the pet bar as the game keeps it: per slot a command (its token) or an ability; a pet action id each
+	local bar, cursor = {}, nil
+	local ID = { PET_ACTION_ATTACK = 101, PET_ACTION_FOLLOW = 102, PET_ACTION_MOVE_TO = 103, PET_ACTION_WAIT = 104,
+		PET_MODE_ASSIST = 105, PET_MODE_DEFENSIVEASSIST = 106, PET_MODE_PASSIVE = 107 }
+	local function cmd(t) return { name = t, tok = true, id = ID[t] } end
+	local function ab(n, sid) return { name = n, sid = sid, id = sid } end
+	rawset(_G, "PetHasActionBar", function() return true end)
+	rawset(_G, "GetPetActionInfo", function(i)
+		local e = bar[i]
+		if e then return e.name, "tex", e.tok or false, false, true, false, e.sid end
+	end)
+	rawset(_G, "GetCursorInfo", function() if cursor then return "petaction", cursor.id end end)
+	rawset(_G, "ClearCursor", function() cursor = nil end)
+	rawset(_G, "PickupPetAction", function(i) bar[i], cursor = cursor, bar[i] end)
+	local book = {}
+	local E = setmetatable({ SpellBookSpellBank = { Player = 0, Pet = 1 },
+		SpellBookItemType = { None = 0, Spell = 1, FutureSpell = 2, PetAction = 3, Flyout = 4 } }, { __index = savedEnum })
+	rawset(_G, "Enum", E)
+	rawset(_G, "C_SpellBook", {
+		HasPetSpells = function() if #book > 0 then return #book, "DEMON" end end,
+		GetSpellBookItemInfo = function(i, bank)
+			local e = bank == 1 and book[i]
+			if e then return { actionID = e.it.id, spellID = e.it.sid, itemType = 3, name = e.label, subName = "",
+				iconID = 1, isPassive = false, isOffSpec = false } end
+		end,
+		PickupSpellBookItem = function(i, bank) if bank == 1 and book[i] then cursor = book[i].it end end,
+	})
+	rawset(_G, "C_ActionBar", { GetPetActionPetBarIndices = function(id)
+		local out = {}
+		for i = 1, 10 do if bar[i] and bar[i].id == id then out[#out + 1] = i end end
+		if #out > 0 then return out end
+	end })
+	rawset(_G, "C_PetInfo", { IsPetActionPassive = function(id) return id == 999 end })
+	local function said() return M.printed and M.printed[#M.printed] or "" end
+	-- his keys: Alt + side 1 and 2 (pet slots 1 and 2) and Alt + side 3 on pet slot 5
+	binds["ALT-F3"] = "BONUSACTIONBUTTON5"
+	M.fire("UPDATE_BINDINGS")
+	-- his Voidwalker out: the bar is remembered
+	bar = { cmd("PET_MODE_DEFENSIVEASSIST"), cmd("PET_ACTION_WAIT"), ab("Sacrifice", 7812), cmd("PET_MODE_ASSIST"),
+		ab("Torment", 3716), cmd("PET_MODE_PASSIVE"), cmd("PET_ACTION_ATTACK"), cmd("PET_ACTION_FOLLOW"),
+		cmd("PET_ACTION_MOVE_TO") }
+	M.fire("PET_BAR_UPDATE")
+	M.flushTimers()
+	-- his Imp out: only Phase Shift on its bar; its spellbook has the commands, four abilities and a passive one
+	bar = { ab("Phase Shift", 4511) }
+	book = {}
+	for _, t in ipairs({ "PET_ACTION_ATTACK", "PET_ACTION_FOLLOW", "PET_ACTION_MOVE_TO", "PET_ACTION_WAIT", "PET_MODE_ASSIST",
+		"PET_MODE_DEFENSIVEASSIST", "PET_MODE_PASSIVE" }) do book[#book + 1] = { label = STR[t], it = cmd(t) } end
+	for _, a in ipairs({ { "Firebolt", 3110 }, { "Blood Pact", 6307 }, { "Fire Shield", 2947 }, { "Phase Shift", 4511 },
+		{ "Some Passive", 999 } }) do book[#book + 1] = { label = a[1], it = ab(a[1], a[2]) } end
+	M.fire("PET_BAR_UPDATE")
+	M.flushTimers()
+	SlashCmdList.WACKYBARS("fillpet")
+	local function at(i) return bar[i] and bar[i].name end
+	check("Fill empty pet slots: the commands go on the keys they have on the Voidwalker (Attack 7, Follow 8, Move To 9, ...)",
+		at(7) == "PET_ACTION_ATTACK" and at(8) == "PET_ACTION_FOLLOW" and at(9) == "PET_ACTION_MOVE_TO"
+		and at(2) == "PET_ACTION_WAIT" and at(4) == "PET_MODE_ASSIST" and at(6) == "PET_MODE_PASSIVE")
+	check("... the Imp's abilities: the empty slot on a spot first (Firebolt on Alt + side 3), then the others",
+		at(5) == "Firebolt" and at(3) == "Blood Pact" and at(10) == "Fire Shield")
+	local passiveOn = false
+	for i = 1, 10 do if bar[i] and bar[i].id == 999 then passiveOn = true end end
+	check("... Phase Shift stays in slot 1, no second Phase Shift, nothing passive, nothing left on the cursor",
+		at(1) == "Phase Shift" and not passiveOn and cursor == nil)
+	check("... it says what has no key and what did not fit (Defensive: its slot 1 holds Phase Shift, 11 for 10 slots)",
+		said():find("No room left for: Defensive.", 1, true) ~= nil and said():find("Fire Shield (slot 10)", 1, true) ~= nil
+		and said():find("filled 9 empty pet slots", 1, true) ~= nil)
+	SlashCmdList.WACKYBARS("fillpet")
+	check("... pressed again: the bar is full, it says so", said():find("this pet's bar is full", 1, true) ~= nil)
+	-- in a fight, or with something on the cursor: nothing happens
+	bar = { ab("Phase Shift", 4511) }
+	combat = true
+	SlashCmdList.WACKYBARS("fillpet")
+	local fight = said():find("after the fight", 1, true) ~= nil and at(7) == nil
+	combat = false
+	cursor = ab("Firebolt", 3110)
+	SlashCmdList.WACKYBARS("fillpet")
+	check("... in a fight, or with something on the cursor: it refuses and changes nothing", fight and at(7) == nil
+		and said():find("put down what is on your cursor first", 1, true) ~= nil and cursor and cursor.name == "Firebolt")
+	cursor = nil
+	-- nothing remembered yet (no pet with a set-up bar seen): it asks first; pressed again soon, it fills in order
+	DB.petSlots = nil
+	SlashCmdList.WACKYBARS("fillpet")
+	check("nothing remembered yet: it asks for a set-up pet first and changes nothing", at(2) == nil and at(7) == nil
+		and said():find("no pet bar remembered yet", 1, true) ~= nil)
+	SlashCmdList.WACKYBARS("fillpet")
+	check("... pressed again right away: it fills in order (spots first) and says what did not fit", at(2) == "Firebolt"
+		and at(5) == "Blood Pact" and at(3) == "Fire Shield" and at(4) == "PET_ACTION_ATTACK" and at(10) ~= nil
+		and said():find("No room left for: Passive.", 1, true) ~= nil)
+	binds["ALT-F3"] = nil
+	M.fire("UPDATE_BINDINGS")
+	for _, k in ipairs(names) do rawset(_G, k, saved[k]) end -- (also the ones that were not there: gone again)
+	rawset(_G, "Enum", savedEnum)
+end
 binds["ALT-F1"], binds["ALT-F2"] = nil, nil
 M.fire("UPDATE_BINDINGS")
 check("pet keys unbound: the pet buttons and the game's pet bar are back", pet1:GetParent() == _G.PetActionBarButtonContainer1
@@ -1524,6 +1629,8 @@ do
 		end,
 		Rebuild = function() rebuilt = true return true end,
 	})
+	-- (Warlock HUD's global that every rebuild of its own ends with)
+	rawset(_G, "WarlockHudRefreshNameplates", function() end)
 	local function keyOn(t)
 		for _, o in ipairs(M.frames) do
 			local p = o.__kind == "CreateFontString" and o.__points[#o.__points]
@@ -1598,12 +1705,26 @@ do
 	M.flushTimers()
 	check("Warlock HUD rebuilds its rows: the keys go onto the new icons", keyOn(main2[1]) == "s" .. shiftB.wb.spot.label
 		and keyOn(main2[2]) == plainKey and fs.__parent.__parent == main2A)
+	do -- a rebuild of its own (a pet summoned, Warlock HUD's UNIT_PET): new rows, no API call, only its global at the end
+		local main3A, main3 = row({ 136197, 136200 })
+		local api = WarlockHudAPI
+		local oldGet = api.GetDemoAnchors
+		api.GetDemoAnchors = function() return { main = main3A, utility = utilA, buffs = buffA } end
+		WarlockHudRefreshNameplates()
+		M.flushTimers()
+		check("Warlock HUD rebuilds by itself on a pet summoned: the keys go onto its new rows (his \"the binds are gone on whud\")",
+			keyOn(main3[1]) == plainKey and keyOn(main3[2]) == "s" .. shiftB.wb.spot.label)
+		api.GetDemoAnchors = oldGet
+		WarlockHudRefreshNameplates()
+		M.flushTimers()
+	end
 	M.fire("UPDATE_BINDINGS")
 	M.fire("ACTIONBAR_SLOT_CHANGED", 1)
 	M.fire("ACTIONBAR_SLOT_CHANGED", 2)
 	check("bindings or slots changing: worked out again once, a frame later", #M.timers == 1)
 	M.flushTimers()
 	rawset(_G, "WarlockHudAPI", nil)
+	rawset(_G, "WarlockHudRefreshNameplates", nil)
 end
 
 objMt.__index = baseIndex -- (the fake game as it was)
