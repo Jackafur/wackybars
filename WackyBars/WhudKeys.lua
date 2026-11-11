@@ -5,8 +5,9 @@
 -- How an icon finds its key: by its picture. A Warlock HUD icon shows the same picture as the action slot that holds its
 -- spell (every rank alike) or its item (the Healthstone); the key is the one that fires that slot: a WackyBars button's (the
 -- key you gave it in Edit keys too), with its modifier always in front (sQ, cQ, aQ, h1: on the HUD no bar says which), else
--- the key bound in Key Bindings to the game's bar button for that slot. One picture on several keys: a slot with the spell
--- or item itself before a macro, then the first in WackyBars' order (the plain keyboard first).
+-- the key bound in Key Bindings to the game's bar button for that slot. One picture on several keys: the slot with the
+-- spell or item itself, then a macro casting only that one spell, then any other macro; a key without Shift, Ctrl or Alt
+-- before one with; then WackyBars' order (the plain keyboard first).
 -- Warlock HUD is left as it is: WackyBars finds its rows through Warlock HUD's own WarlockHudAPI.GetDemoAnchors and puts one
 -- frame of its own on each row, over the icons, so the keys show, fade and move with the row. It only reads the icons (and
 -- follows when Warlock HUD changes one's picture or shows or hides it).
@@ -53,6 +54,40 @@ local function keyText(b, k)
 	end
 	return GetBindingText(k, 1)
 end
+-- A key with Shift, Ctrl or Alt in it.
+local function modified(k) return type(k) == "string" and (k:find("SHIFT%-") or k:find("CTRL%-") or k:find("ALT%-")) and true or false end
+-- How many spells a macro casts (its /cast, /castsequence and /use lines, conditions and reset= left out).
+local function macroSpells(body)
+	local seen, n = {}, 0
+	for line in body:gmatch("[^\n]+") do
+		local cmd, rest = line:match("^%s*/(%a+)%s*(.*)$")
+		cmd = cmd and cmd:lower()
+		if cmd == "cast" or cmd == "castsequence" or cmd == "use" or cmd == "castrandom" then
+			rest = rest:gsub("%b[]", ""):gsub("reset=%S+", "")
+			for part in rest:gmatch("[^;,]+") do
+				local nm = part:gsub("^%s*!?", ""):gsub("%s*$", ""):lower()
+				if nm ~= "" and not seen[nm] then
+					seen[nm] = true
+					n = n + 1
+				end
+			end
+		end
+	end
+	return n
+end
+-- How much a slot stands for the picture it shows: 0 the spell or item itself, 1 a macro that casts only one spell (his
+-- Agony macro on 1), 2 any other macro (his Spam macro on Shift + wheel up, showing whatever it casts next). His "the
+-- ability you marked as swu is actually 1", then "its still sWU" (Nov 10 night: both are macros).
+local function rankOf(slot)
+	local ok, kind, id = pcall(GetActionInfo, slot)
+	if not ok or secret(kind) then return 2 end
+	if kind ~= "macro" then return 0 end
+	if not secret(id) and GetMacroInfo then
+		local okm, _, _, body = pcall(GetMacroInfo, id)
+		if okm and type(body) == "string" and not secret(body) and macroSpells(body) == 1 then return 1 end
+	end
+	return 2
+end
 -- Each picture on one of your keys, and that key.
 local function keysByPicture()
 	local list, seen = {}, {}
@@ -62,7 +97,7 @@ local function keysByPicture()
 			local kind, slot = b:GetAction()
 			if kind == "action" and type(slot) == "number" and not seen[slot] then
 				seen[slot] = true
-				list[#list + 1] = { slot, keyText(b, k) }
+				list[#list + 1] = { slot, keyText(b, k), modified(k) }
 			end
 		end
 	end
@@ -72,24 +107,22 @@ local function keysByPicture()
 			local key = not seen[slot] and GetBindingKey(g[1] .. n)
 			if key then
 				seen[slot] = true
-				list[#list + 1] = { slot, GetBindingText(key, 1) }
+				list[#list + 1] = { slot, GetBindingText(key, 1), modified(key) }
 			end
 		end
 	end
-	-- A slot holding the spell or item itself goes before a macro showing its picture (his "the ability you marked as swu is
-	-- actually 1", Nov 10 night: his Spam macro on Shift + wheel up shows Curse of Agony's picture and came first in the
-	-- order; Curse of Agony itself is on 1). Then the order above (the plain keyboard first).
+	-- Several keys showing one picture: the one that stands for it most (rankOf), then one without Shift, Ctrl or Alt,
+	-- then the order above (the plain keyboard first).
+	local best = {}
+	for _, e in ipairs(list) do
+		local p = GetActionTexture(e[1])
+		if not secret(p) and p ~= nil and type(e[2]) == "string" and e[2] ~= "" then
+			local score = rankOf(e[1]) * 2 + (e[3] and 1 or 0)
+			if not best[p] or score < best[p].score then best[p] = { score = score, key = e[2] } end
+		end
+	end
 	local out = {}
-	for pass = 1, 2 do
-		for _, e in ipairs(list) do
-			local okKind, kind = pcall(GetActionInfo, e[1])
-			local isMacro = okKind and not secret(kind) and kind == "macro"
-			if (pass == 2) == isMacro then
-				local p = GetActionTexture(e[1])
-				if not secret(p) and p ~= nil and out[p] == nil and type(e[2]) == "string" and e[2] ~= "" then out[p] = e[2] end
-			end
-		end
-	end
+	for p, e in pairs(best) do out[p] = e.key end
 	return out
 end
 

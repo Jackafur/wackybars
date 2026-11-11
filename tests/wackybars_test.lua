@@ -1554,6 +1554,25 @@ do
 		M.flushTimers()
 		check("a macro showing a spell's picture loses to the slot with the spell itself (his sWU that is really 1)",
 			keyOn(main[1]) == "s" .. shiftB.wb.spot.label)
+		-- both macros (his case: "Ago..." on 1 is a macro too): a macro casting only that spell beats a Spam macro, even one
+		-- on a key without a modifier and earlier in the order
+		rawset(_G, "GetActionInfo", function(slot)
+			if slot == sA then return "macro", 1 end
+			if slot == sB then return "macro", 2 end
+		end)
+		local bodies = { [1] = "#showtooltip\n/castsequence reset=3 Shadow Bolt, Immolate, Corruption\n/cast Life Tap",
+			[2] = "#showtooltip\n/cast [@mouseover,harm,nodead][] Curse of Agony" }
+		rawset(_G, "GetMacroInfo", function(id) return id == 1 and "Spam" or "Agony", 0, bodies[id] end)
+		pics[sA], pics[sB] = 136501, 136501
+		main[1]:SetTexture(136501)
+		M.flushTimers()
+		check("two macros, one picture: the macro casting only that spell wins over the Spam macro (his \"still sWU\")",
+			keyOn(main[1]) == "s" .. shiftB.wb.spot.label)
+		bodies[1] = "/cast [@mouseover,harm][] Curse of Agony"
+		M.fire("ACTIONBAR_SLOT_CHANGED")
+		M.flushTimers()
+		check("... two one-spell macros: the key without Shift, Ctrl or Alt wins", keyOn(main[1]) == plain.wb.spot.label)
+		rawset(_G, "GetMacroInfo", nil)
 		rawset(_G, "GetActionInfo", oldInfo)
 		pics[sA], pics[sB] = 136197, 136200
 		main[1]:SetTexture(136197)
