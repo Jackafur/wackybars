@@ -2,7 +2,7 @@
 ## Title: WackyBars
 ## Notes: Your keys as keyboard- and mouse-shaped action bars. Shows the slot each key fires today and never writes your saved key bindings. Buttons from Bartender4's LibActionButton-1.0.
 ## Author: Jackafur
-## Version: 0.1.1
+## Version: 0.2.0
 ## IconTexture: Interface\AddOns\WackyBars\icon.tga
 ## SavedVariablesPerCharacter: WackyBarsCharDB
 

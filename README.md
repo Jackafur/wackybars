@@ -56,7 +56,10 @@ updated when keys or slots change. Warlock HUD itself is not changed.
 **Pet keys:** a key bound to a pet bar key in Key Bindings (Alt + F1 to F10 on the Alt mouse bar, say) shows the game's own
 pet button for it: the right abilities for whatever pet is out, autocast and cooldowns as on the game's bar, shown only
 with a pet (the spot keeps an empty slot otherwise, also when the pet has nothing in that slot). The other buttons of that bar stay action buttons. While any pet button sits on a WackyBars bar the game's pet
-bar is hidden; QuietHUD fades that whole bar, its other buttons too, with its Pet bar row (Elements page).
+bar is hidden; QuietHUD fades that whole bar, its other buttons too, with its Pet bar row (Elements page). Each pet keeps
+its own pet bar in the game; **Fill empty pet slots** (`/wbars`, or `/wbars fillpet`) puts what the pet out knows and its
+bar lacks into its empty slots, the way dragging from the spellbook's Pet tab does: commands on the slots they have on
+your other pets, abilities on the slots your keys use first. Nothing on the bar moves; it says what went where.
 
 Keys bound to moving (ESDF, WASD, whatever Key Bindings say) show a faint arrow instead of a button. The buttons are
 Bartender4's: LibActionButton-1.0 (with LibStub, CallbackHandler-1.0, LibButtonGlow-1.0, copied from Bartender 4.18.4
