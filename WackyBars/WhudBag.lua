@@ -13,7 +13,7 @@ local _, ns = ...
 local wb = ns and ns.wb
 if not wb then return end
 
-local BAG_ID = 211527 -- Cozy Sleeping Bag
+local BAG_ID = 211527 -- Cozy Sleeping Bag (the number Naowh uses too, NaowhForever/Shared/Game/Items.lua)
 local BAG_NAME = "Cozy Sleeping Bag" -- (also found by name, in case Forever gives it another number)
 local SPACING, BORDER = 1, 1 -- (Warlock HUD's ICON_SPACING and BORDER_SIZE)
 local CROP = (1 - 1 / 1.3) / 2 -- (Warlock HUD's ICON_CROP)
