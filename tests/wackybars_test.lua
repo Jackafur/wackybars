@@ -764,7 +764,8 @@ do
 	rawset(_G, "PickupPetAction", function(i) bar[i], cursor = cursor, bar[i] end)
 	local book = {}
 	local E = setmetatable({ SpellBookSpellBank = { Player = 0, Pet = 1 },
-		SpellBookItemType = { None = 0, Spell = 1, FutureSpell = 2, PetAction = 3, Flyout = 4 } }, { __index = savedEnum })
+		SpellBookItemType = { None = 0, Spell = 1, FutureSpell = 2, PetAction = 3, Flyout = 4 },
+		ActionBarSet = { None = 0, Mkb = 1, Gamepad = 2, All = 3 } }, { __index = savedEnum })
 	rawset(_G, "Enum", E)
 	rawset(_G, "C_SpellBook", {
 		HasPetSpells = function() if #book > 0 then return #book, "DEMON" end end,
@@ -775,9 +776,15 @@ do
 		end,
 		PickupSpellBookItem = function(i, bank) if bank == 1 and book[i] then cursor = book[i].it end end,
 	})
-	rawset(_G, "C_ActionBar", { GetPetActionPetBarIndices = function(id)
+	-- the game's answer for where a pet action sits: its mouse and keyboard bar (set 1), and asked without a set (or for all
+	-- of them) its gamepad bar too, which keeps the pet's whole default layout out of sight
+	local gamepad = {}
+	local asked = {}
+	rawset(_G, "C_ActionBar", { GetPetActionPetBarIndices = function(id, set)
+		asked[#asked + 1] = set
 		local out = {}
 		for i = 1, 10 do if bar[i] and bar[i].id == id then out[#out + 1] = i end end
+		if set ~= 1 then for i = 1, 10 do if gamepad[i] and gamepad[i].id == id then out[#out + 1] = i end end end
 		if #out > 0 then return out end
 	end })
 	rawset(_G, "C_PetInfo", { IsPetActionPassive = function(id) return id == 999 end })
@@ -798,10 +805,18 @@ do
 		"PET_MODE_DEFENSIVEASSIST", "PET_MODE_PASSIVE" }) do book[#book + 1] = { label = STR[t], it = cmd(t) } end
 	for _, a in ipairs({ { "Firebolt", 3110 }, { "Blood Pact", 6307 }, { "Fire Shield", 2947 }, { "Phase Shift", 4511 },
 		{ "Some Passive", 999 } }) do book[#book + 1] = { label = a[1], it = ab(a[1], a[2]) } end
+	-- (the gamepad bar keeps the Imp's whole default layout: commands and abilities in every slot)
+	for i, t in ipairs({ "PET_ACTION_ATTACK", "PET_ACTION_FOLLOW", "PET_ACTION_MOVE_TO", "PET_MODE_ASSIST", "PET_MODE_DEFENSIVEASSIST",
+		"PET_MODE_PASSIVE", "PET_ACTION_WAIT" }) do gamepad[i] = cmd(t) end
+	gamepad[8], gamepad[9], gamepad[10] = ab("Firebolt", 3110), ab("Blood Pact", 6307), ab("Fire Shield", 2947)
 	M.fire("PET_BAR_UPDATE")
 	M.flushTimers()
 	SlashCmdList.WACKYBARS("fillpet")
 	local function at(i) return bar[i] and bar[i].name end
+	local onlyMkb = #asked > 0
+	for _, set in ipairs(asked) do if set ~= 1 then onlyMkb = false end end
+	check("Fill empty pet slots: it asks the game about the mouse and keyboard pet bar only, never the hidden gamepad one (his"
+		.. " Imp's \"nothing missing\", Nov 10 night)", onlyMkb and not said():find("nothing missing", 1, true))
 	check("Fill empty pet slots: the commands go on the keys they have on the Voidwalker (Attack 7, Follow 8, Move To 9, ...)",
 		at(7) == "PET_ACTION_ATTACK" and at(8) == "PET_ACTION_FOLLOW" and at(9) == "PET_ACTION_MOVE_TO"
 		and at(2) == "PET_ACTION_WAIT" and at(4) == "PET_MODE_ASSIST" and at(6) == "PET_MODE_PASSIVE")

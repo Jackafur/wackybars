@@ -2583,10 +2583,19 @@ ns.wb = {
 		end
 		if empty == 0 then say("this pet's bar is full.") return end
 		local AB, PI = C_ActionBar, C_PetInfo
+		-- Already on the pet's bar (the ten slots your keys use): the game's answer for its mouse and keyboard bar
+		-- (Enum.ActionBarSet.Mkb, as the game's own spellbook asks; asked without it, the game counts every bar set, the
+		-- gamepad one too, and his Imp's Attack, Follow and the rest counted as there: "nothing missing", Nov 10 night), a
+		-- slot it names counting only when that slot holds something; else the bar's own slots by command, ability or name.
+		local MKB = Enum and Enum.ActionBarSet and Enum.ActionBarSet.Mkb
 		local function there(info, token)
-			if info.itemType == types.PetAction and AB and AB.GetPetActionPetBarIndices then
-				local ok, idx = pcall(AB.GetPetActionPetBarIndices, info.actionID)
-				if ok and type(idx) == "table" and not hidden(idx) and #idx > 0 then return true end
+			if MKB and info.itemType == types.PetAction and AB and AB.GetPetActionPetBarIndices then
+				local ok, idx = pcall(AB.GetPetActionPetBarIndices, info.actionID, MKB)
+				if ok and type(idx) == "table" and not hidden(idx) then
+					for _, slot in ipairs(idx) do
+						if type(slot) == "number" and slot >= 1 and slot <= 10 and not free[slot] then return true end
+					end
+				end
 			end
 			if token then return onBar[token] == true end
 			return onBar["spell:" .. tostring(info.spellID)] or onBar["spell:" .. tostring(info.actionID)]
