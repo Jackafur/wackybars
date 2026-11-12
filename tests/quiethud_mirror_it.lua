@@ -190,6 +190,18 @@ check("... and Bar 1 (no Mouse over only) stays down", h1.__alpha < 0.5)
 over = false
 run(4)
 check("mouse gone: both fade back", h4.__alpha < 0.5 and h8.__alpha < 0.5)
+-- A WackyBars bar shown while its key is held (Hold.lua, Nov 12: his idle opacity 0 and Bar 8 Mouse over only left the held
+-- bars invisible): its holders come up to the Action bars' Shown while held, and go back with their row after.
+QuietHUDDB.mouseTogether = false
+run(2)
+local shown = (QuietHUDDB.ovBars or 0) > 0 and math.max(QuietHUDDB.ovBars, 0.1) or (QuietHUDDB.base or 0.6)
+QuietHUD_HeldBar({ h8 }, true)
+run(1)
+check("Hypershift held: its holder at the Action bars' Shown (" .. tostring(h8.__alpha) .. "), Bar 8 itself still down",
+	math.abs(h8.__alpha - shown) < 0.01 and MultiBar7.__alpha < 0.5)
+QuietHUD_HeldBar({ h8 }, false)
+run(1)
+check("... let go: back with Bar 8", h8.__alpha == MultiBar7.__alpha)
 -- Audit 2026-11-10 evening fixes.
 -- (1) QuietHUD switched off while the pet bar (own Shown) and a Show with bar are faded: every bar back at 1.
 QuietHUDDB.ovPetBar, QuietHUDDB.barPeek = 0.5, 511 - 1

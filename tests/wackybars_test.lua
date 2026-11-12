@@ -1902,8 +1902,12 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 	check("... its bar is protected and hidden until End is down", bar.__template == "SecureFrameTemplate" and not bar.__shown
 		and refs.bar == bar)
 	check("... up: side 1 (F1) still does its own job", overrides.F1 == nil)
+	local told = {}
+	rawset(_G, "QuietHUD_HeldBar", function(holders, on) told[#told + 1] = { holders = holders, on = on } end)
 	press(true)
 	check("End down: the bar shows", bar.__shown)
+	check("... QuietHUD is told, with the bar's holders (it brings them up to the Shown)", #told == 1 and told[1].on == true
+		and told[1].holders[8] == _G.WackyBarsHoldMouseHyper8)
 	check("... side 1 (F1) fires Hypershift side 1's (Bar 8 button 10, the game's command)", overrides.F1
 		and overrides.F1.cmd == "MULTIACTIONBAR7BUTTON10" and overrides.F1.priority)
 	check("... side 12 (=) fires Numpad +'s", overrides["="] and overrides["="].cmd == "MULTIACTIONBAR7BUTTON3")
@@ -1919,6 +1923,8 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 	check("End up: the keys are the plain ones again (the wheel click its plain button's), the bar goes", overrides.F1 == nil
 		and overrides.BUTTON3 and overrides.BUTTON3.click == "WackyBarsMousePlainWheel" and overrides.END and not bar.__shown)
 	check("... the bar's own keys (Numpad) never touched", overrides.NUMPAD1 == nil)
+	check("... and QuietHUD told it went", told[#told].on == false)
+	rawset(_G, "QuietHUD_HeldBar", nil)
 	DB.hidden.MouseHyperSide2 = true
 	SlashCmdList.WACKYBARS("status")
 	press(true)

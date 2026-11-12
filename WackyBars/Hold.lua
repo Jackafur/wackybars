@@ -103,6 +103,7 @@ local function fill()
 	end
 	hold:SetAttribute("count", n)
 	hold:SetAttribute("hide", onHold())
+	if hyper then hyper.wbHeld = onHold() end
 	-- shown only while held, Edit keys and Move bars aside (you need to see it there)
 	if hyper and onHold() and not (wb.editing() or wb.moving()) then hyper.frame:Hide() end
 end
@@ -130,12 +131,28 @@ local function fillMods()
 		local rule = MOD_HELD[(bar.id:gsub("^Mouse", ""))]
 		if rule then
 			UnregisterStateDriver(bar.frame, "visibility")
-			if DB and wb.barOn(bar) and not DB.modsAlways and not showAll then
+			bar.wbHeld = DB and wb.barOn(bar) and not DB.modsAlways and true or false
+			if bar.wbHeld and not showAll then
 				RegisterStateDriver(bar.frame, "visibility", rule)
 			else
 				bar.frame:SetShown(wb.barOn(bar))
 			end
 		end
+	end
+end
+-- QuietHUD is told when a held bar shows and goes (QuietHUD_HeldBar): with your idle opacity at 0 or its row Mouse over only it
+-- would come up invisible, so while held its holders sit at the Action bars' Shown, as under the mouse. Only while the bar
+-- shows because its key is held (wbHeld), not in Edit keys or Move bars (at full there anyway). OnShow and OnHide run when the
+-- game shows or hides the bar, so in a fight too; nothing runs between.
+local function tell(bar, on)
+	if QuietHUD_HeldBar then pcall(QuietHUD_HeldBar, bar.holders, on) end
+end
+for _, bar in ipairs(wb.bars) do
+	if bar.id == "MouseHyper" or MOD_HELD[(bar.id:gsub("^Mouse", ""))] then
+		bar.frame:HookScript("OnShow", function()
+			if bar.wbHeld and not (wb.editing() or wb.moving()) then tell(bar, true) end
+		end)
+		bar.frame:HookScript("OnHide", function() tell(bar, false) end)
 	end
 end
 wb.applyHooks[#wb.applyHooks + 1] = fillMods
