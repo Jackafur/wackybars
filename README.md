@@ -11,6 +11,14 @@ Your keys as action bars, placed like the keys (redesigned Nov 10). Shown by def
 - **Hypershift:** the same shape: the grid on Numpad 1 to 9, 0, -, + (your items, the slots of the game's Action Bar 8)
   and E1, E2 and the wheel click as blank buttons (what Hypershift + those send isn't written down: hover one in Edit
   keys and press it).
+- **Hypershift while held (Hold.lua, Nov 12):** for the Naga's blue profile, where Hypershift is a key of its own (F14)
+  and the side buttons send their plain keys. xremap turns F14 into End in games (`~/.config/xremap/config.yml`, "games
+  hypershift held"; WoW under Wine can't see F14 or F13). While End is down, side 1 to 12, E1, E2 and the wheel click
+  press the Hypershift bar's buttons at the same spots (a game bar slot through the game's own command, a spare slot by
+  clicking the button, a hidden spot does nothing); let go, they are the plain keys again. Secure snippet, so it works in
+  a fight. Box in `/wbars`, ticked by default: the Hypershift bar shows only while End is held, and QuietHUD leaves it
+  out of its fading then (`WackyBars_HyperOnHold`). On green or red (no F14) untick it to keep the bar on screen. Edit
+  keys and Move bars show it. Alt-tabbing out while holding it can leave it held: press it once more.
 
 **Off by default, a box each:** Shift, Ctrl and Alt copies of the keyboard and the mouse bars (the plan is married
 macros, `[mod:shift]` on the plain key, so these stay empty). On the Shift and Ctrl keyboard copies the two spots after V
