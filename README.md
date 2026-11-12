@@ -19,6 +19,10 @@ Your keys as action bars, placed like the keys (redesigned Nov 10). Shown by def
   a fight. Box in `/wbars`, ticked by default: the Hypershift bar shows only while End is held, at
   QuietHUD's opacity (it fades with the Action Bar 8 row like before). On green or red (no F14) untick it to keep the bar on screen. Edit
   keys and Move bars show it. Alt-tabbing out while holding it can leave it held: press it once more.
+- **Shift and Ctrl bars while held** (his ask, Nov 12): with a Shift or Ctrl copy switched on, its keyboard and mouse bars
+  show only while you hold that key (the game's state driver, `[mod:shift]` / `[mod:ctrl]`, so in a fight too), at
+  QuietHUD's opacity for their rows. Second box in `/wbars`, ticked by default; untick it to keep them on screen. Cost: the
+  game's driver checks one condition per copy that is on every 0.2 s (it runs anyway for the game's bars).
 
 **Off by default, a box each:** Shift, Ctrl and Alt copies of the keyboard and the mouse bars (the plan is married
 macros, `[mod:shift]` on the plain key, so these stay empty). On the Shift and Ctrl keyboard copies the two spots after V

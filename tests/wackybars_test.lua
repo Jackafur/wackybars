@@ -1943,6 +1943,33 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 	check("Move bars: the Hypershift bar shows to be moved", bar.__shown)
 	WackyBars_ToggleMove()
 	check("... done: hidden again", not bar.__shown)
+	-- Shift and Ctrl bars while held (his ask, Nov 12): their copies on a state driver, the game's own [mod:] check
+	local S, MS, C, MC, A = _G.WackyBarsShift, _G.WackyBarsMouseShift, _G.WackyBarsCtrl, _G.WackyBarsMouseCtrl, _G.WackyBarsAlt
+	local function rule(f) return drivers[f] and drivers[f].visibility end
+	local offWas = { DB.off.Shift, DB.off.MouseShift, DB.off.Ctrl, DB.off.MouseCtrl, DB.off.Alt }
+	DB.off.Shift, DB.off.MouseShift, DB.off.Ctrl, DB.off.MouseCtrl, DB.off.Alt = nil, nil, nil, nil, nil
+	SlashCmdList.WACKYBARS("status")
+	check("Shift and Ctrl copies on: protected frames, shown by the game only while their key is held",
+		S.__template == "SecureFrameTemplate" and MC.__template == "SecureFrameTemplate"
+		and rule(S) == "[mod:shift] show; hide" and rule(MS) == "[mod:shift] show; hide"
+		and rule(C) == "[mod:ctrl] show; hide" and rule(MC) == "[mod:ctrl] show; hide")
+	check("... the Alt copy stays as it was (always shown, not protected)", rule(A) == nil and A.__shown and A.__template == nil)
+	WackyBars_ToggleMove()
+	check("Move bars: the rule is off and they show to be moved", rule(S) == nil and rule(MC) == nil and S.__shown and MC.__shown)
+	WackyBars_ToggleMove()
+	check("... done: the rule is back", rule(S) == "[mod:shift] show; hide" and rule(MC) == "[mod:ctrl] show; hide")
+	DB.modsAlways = true
+	SlashCmdList.WACKYBARS("status")
+	check("box unticked: no rule, the copies stay on screen", rule(S) == nil and rule(MC) == nil and S.__shown and MC.__shown)
+	DB.modsAlways = nil
+	DB.off.Ctrl = true
+	SlashCmdList.WACKYBARS("status")
+	check("a copy switched off: no rule, hidden", rule(C) == nil and not C.__shown and rule(MC) == "[mod:ctrl] show; hide")
+	DB.off.Shift, DB.off.MouseShift, DB.off.Ctrl, DB.off.MouseCtrl, DB.off.Alt = unpack(offWas, 1, 5)
+	SlashCmdList.WACKYBARS("status")
+	check("... put back as before: a rule exactly on each copy that is on", (rule(S) ~= nil) == not DB.off.Shift
+		and (rule(MS) ~= nil) == not DB.off.MouseShift and (rule(C) ~= nil) == not DB.off.Ctrl
+		and (rule(MC) ~= nil) == not DB.off.MouseCtrl)
 end
 
 objMt.__index = baseIndex -- (the fake game as it was)

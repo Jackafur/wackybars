@@ -212,9 +212,10 @@ for si, set in ipairs(SETS) do
 			layerIndex = li, short = set.short or L.short, arrows = {}, buttons = {},
 			-- (the Alt mouse bar goes with the plain mouse bar: his pick, Nov 10)
 			follow = (L.id == "Alt" and set.id == "Mouse") and "MousePlain" or L.follow }
-		-- (the Hypershift bar is a protected frame of its own: Hold.lua shows it from secure code while Hypershift is held, in a
-		-- fight too; WackyBars itself only shows, hides, moves or sizes bars out of a fight)
-		local f = CreateFrame("Frame", "WackyBars" .. bar.id, container, set.id == "MouseHyper" and "SecureFrameTemplate" or nil)
+		-- (the Hypershift, Shift and Ctrl bars are protected frames of their own: Hold.lua shows them from secure code while their
+		-- key is held, in a fight too; WackyBars itself only shows, hides, moves or sizes bars out of a fight)
+		local held = set.id == "MouseHyper" or (not set.plainOnly and (L.id == "Shift" or L.id == "Ctrl"))
+		local f = CreateFrame("Frame", "WackyBars" .. bar.id, container, held and "SecureFrameTemplate" or nil)
 		f:SetMovable(true)
 		f:SetClampedToScreen(true)
 		bar.frame = f

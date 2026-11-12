@@ -13,6 +13,12 @@
 -- stealth and the pet bar as with the Numpad key); a button with a spare slot is clicked; a Numpad key bound to something
 -- else (a macro, another addon's key) does that; an empty or hidden spot does nothing while held.
 -- Cost: nothing runs until the key is pressed; then one snippet on press and one on release. No OnUpdate, no events.
+-- Shift and Ctrl bars while held (his ask, Nov 12: "holding shift brings up the shift keyboard and mouse action bars"): with
+-- a Shift or Ctrl copy switched on in /wbars and the second box there ticked (the default), the keyboard and mouse copies of
+-- that modifier show only while you hold it, through the game's own state driver ([mod:shift] / [mod:ctrl]), so in a fight
+-- too. QuietHUD fades them with their rows as always. Typing a capital in chat brings the Shift bars up for that moment.
+-- Cost: the game's state driver (already running for the game's own bars) checks one macro condition per copy that is on,
+-- every 0.2 seconds and on each modifier change. Edit keys and Move bars show them.
 local _, ns = ...
 local wb = ns and ns.wb
 if not wb then return end
@@ -111,4 +117,31 @@ wb.optionRows[#wb.optionRows + 1] = {
 	label = "Hypershift bar only while you hold Hypershift (Naga blue profile)",
 	get = function() local DB = wb.db() return DB and not DB.hyperAlways end,
 	set = function(v) wb.db().hyperAlways = (not v) or nil end,
+}
+
+-- Shift and Ctrl: the copy bars of each, on a state driver while the box is ticked (out of a fight, after each apply and
+-- each mode change; the driver itself works in a fight).
+local MOD_HELD = { Shift = "[mod:shift] show; hide", Ctrl = "[mod:ctrl] show; hide" }
+local function fillMods()
+	if InCombatLockdown() then return end
+	local DB = wb.db()
+	local showAll = wb.editing() or wb.moving()
+	for _, bar in ipairs(wb.bars) do
+		local rule = MOD_HELD[(bar.id:gsub("^Mouse", ""))]
+		if rule then
+			UnregisterStateDriver(bar.frame, "visibility")
+			if DB and wb.barOn(bar) and not DB.modsAlways and not showAll then
+				RegisterStateDriver(bar.frame, "visibility", rule)
+			else
+				bar.frame:SetShown(wb.barOn(bar))
+			end
+		end
+	end
+end
+wb.applyHooks[#wb.applyHooks + 1] = fillMods
+wb.modeHooks[#wb.modeHooks + 1] = fillMods
+wb.optionRows[#wb.optionRows + 1] = {
+	label = "Shift and Ctrl bars only while you hold Shift or Ctrl",
+	get = function() local DB = wb.db() return DB and not DB.modsAlways end,
+	set = function(v) wb.db().modsAlways = (not v) or nil end,
 }
