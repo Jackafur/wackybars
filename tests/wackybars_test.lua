@@ -28,9 +28,26 @@ rawset(_G, "GetBindingText", function(k) return k end)
 rawset(_G, "HasAction", function(s) return actions[s] or false end)
 rawset(_G, "SetBinding", function() written = written + 1 end)
 rawset(_G, "SaveBindings", function() written = written + 1 end)
-rawset(_G, "SetOverrideBinding", function(_, _, key, cmd) overrides[key] = { cmd = cmd } end)
-rawset(_G, "SetOverrideBindingClick", function(_, _, key, name, how) overrides[key] = { click = name, how = how } end)
-rawset(_G, "ClearOverrideBindings", function() overrides = {} end)
+-- (per owner, as in the game: clearing one owner's keys leaves the others'; overrides is every owner's together, a priority
+-- one over a plain one)
+local byOwner = {}
+local function merge()
+	overrides = {}
+	for pass = 1, 2 do
+		for _, t in pairs(byOwner) do
+			for k, v in pairs(t) do if (pass == 1) ~= (v.priority == true) then overrides[k] = v end end
+		end
+	end
+end
+local function setOverride(owner, priority, key, v)
+	byOwner[owner] = byOwner[owner] or {}
+	if v then v.priority = priority and true or nil end
+	byOwner[owner][key] = v
+	merge()
+end
+rawset(_G, "SetOverrideBinding", function(o, p, key, cmd) setOverride(o, p, key, cmd and { cmd = cmd } or nil) end)
+rawset(_G, "SetOverrideBindingClick", function(o, p, key, name, how) setOverride(o, p, key, { click = name, how = how }) end)
+rawset(_G, "ClearOverrideBindings", function(o) byOwner[o] = nil merge() end)
 local drivers = {}
 rawset(_G, "RegisterStateDriver", function(f, state, v) drivers[f] = drivers[f] or {}; drivers[f][state] = v end)
 rawset(_G, "UnregisterStateDriver", function(f, state) if drivers[f] then drivers[f][state] = nil end end)
@@ -1633,16 +1650,8 @@ do
 		return a, regions
 	end
 	local mainA, main = row({ 136197, 999 })
-	local utilA, util = row({ 136200, 135230 }) -- (135230: a Healthstone, for the sleeping bag below)
+	local utilA, util = row({ 136200, 135230 }) -- (135230: a Healthstone)
 	for _, t in ipairs(util) do rawset(t, "__w", 24) end
-	-- the sleeping bag (WhudBag.lua): Warlock HUD's stones, the bag's picture, not in your bags yet
-	local bagCount, bagAsked = 0, nil
-	local oldItem = C_Item
-	rawset(_G, "C_Item", setmetatable({
-		GetItemIconByID = function(id) return id == 5512 and 135230 or id == 211527 and 134400 or 1 end,
-		GetItemCount = function(id) return id == 211527 and bagCount or 0 end,
-		GetItemCooldown = function(id) bagAsked = id return 100, 3600 end,
-	}, { __index = oldItem }))
 	local buffA, buff = row({ 136300 }, true)
 	local rebuilt = false
 	local main2A, main2 = row({ 136200, 136197 })
@@ -1755,38 +1764,6 @@ do
 	M.fire("ACTIONBAR_SLOT_CHANGED", 2)
 	check("bindings or slots changing: worked out again once, a frame later", #M.timers == 1)
 	M.flushTimers()
-	do -- the sleeping bag on Warlock HUD (his "we should add sleeping bag to lockhud")
-		local function bagIcon()
-			for _, o in ipairs(M.frames) do
-				local p = o.__kind == "Frame" and o.__parent == utilA and o.__points[1]
-				if p and p[2] == utilA and p[4] ~= 0 and not rawget(o, "labels") and o.__w == 24 then return o, p end
-			end
-		end
-		local h = bagIcon()
-		check("sleeping bag: not in your bags, nothing on Warlock HUD", not (h and h.__shown))
-		bagCount = 1
-		M.fire("BAG_UPDATE_DELAYED")
-		local p
-		h, p = bagIcon()
-		check("in your bags: an icon on the stones' row, the stones' size, beside them (right end: they are not leftmost)",
-			h and h.__shown and p[1] == "CENTER" and p[4] == 40 * 2 + 24 + 1)
-		check("... with the bag's cooldown asked for, and Warlock HUD's icons left where they were",
-			bagAsked == 211527 and #util[1].__points == 1 and #util[2].__points == 1 and next(utilA.__scripts) == nil)
-		SlashCmdList.WACKYBARS("bag")
-		check("/wbars bag switches it off", not h.__shown and DB.whudBag == false)
-		SlashCmdList.WACKYBARS("bag")
-		check("... and on again", h.__shown and DB.whudBag == nil)
-		-- the stones leftmost (his order): the bag goes left of them
-		util[2].__points = { { "CENTER", utilA, "CENTER", 0, 0 } }
-		WarlockHudAPI.Rebuild()
-		h, p = bagIcon()
-		check("stones at the row's left end (his order): the bag goes left of them", h and p[4] == -(24 + 1))
-		bagCount = 0
-		M.fire("BAG_UPDATE_DELAYED")
-		check("out of your bags: gone", not h.__shown)
-		M.flushTimers()
-	end
-	rawset(_G, "C_Item", oldItem)
 	rawset(_G, "WarlockHudAPI", nil)
 	rawset(_G, "WarlockHudRefreshNameplates", nil)
 end
@@ -1901,6 +1878,72 @@ do
 	check("... the fight ends: they stop", not glowOn(A))
 	rawset(_G, "UnitCanAttack", nil)
 	rawset(_G, "GetTime", oldTime)
+end
+
+do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in for the Naga's F14 on blue) held turns the plain
+	-- mouse keys into the Hypershift bar's, through a secure snippet run here by a small stand-in for the game's
+	local hold, refs = _G.WackyBarsHyperHold, {}
+	rawset(hold, "SetFrameRef", function(_, k, f) refs[k] = f end)
+	SlashCmdList.WACKYBARS("status")
+	local env = { tostring = tostring }
+	local snippet = assert(loadstring("local self, button, down = ...\n" .. hold.__attrs._onclick))
+	setfenv(snippet, env)
+	local handle = {
+		GetAttribute = function(_, k) return hold.__attrs[k] end,
+		SetAttribute = function(_, k, v) hold.__attrs[k] = v end,
+		GetFrameRef = function(_, k) return refs[k] end,
+		SetBinding = function(_, p, key, cmd) SetOverrideBinding(hold, p, key, cmd) end,
+		SetBindingClick = function(_, p, key, name, how) SetOverrideBindingClick(hold, p, key, name, how) end,
+		ClearBindings = function() ClearOverrideBindings(hold) end,
+	}
+	local function press(down) snippet(handle, "LeftButton", down) end
+	local bar = _G.WackyBarsMouseHyper
+	check("Hypershift held: End presses the hold button", overrides.END and overrides.END.click == "WackyBarsHyperHold")
+	check("... its bar is protected and hidden until End is down", bar.__template == "SecureFrameTemplate" and not bar.__shown
+		and refs.bar == bar)
+	check("... QuietHUD is told to leave it out of its fading", WackyBars_HyperOnHold() == true)
+	check("... up: side 1 (F1) still does its own job", overrides.F1 == nil)
+	press(true)
+	check("End down: the bar shows", bar.__shown)
+	check("... side 1 (F1) fires Hypershift side 1's (Bar 8 button 10, the game's command)", overrides.F1
+		and overrides.F1.cmd == "MULTIACTIONBAR7BUTTON10" and overrides.F1.priority)
+	check("... side 12 (=) fires Numpad +'s", overrides["="] and overrides["="].cmd == "MULTIACTIONBAR7BUTTON3")
+	check("... side 2 (F2) clicks Hypershift side 2's spare slot the library's way", overrides.F2
+		and overrides.F2.click == "WackyBarsMouseHyperSide2" and overrides.F2.how == "Keybind")
+	check("... E1, E2 and the wheel click press the Hypershift bar's own", overrides.NUMPADMULTIPLY
+		and overrides.NUMPADMULTIPLY.click == "WackyBarsMouseHyperEdge1" and overrides.NUMPADDIVIDE.click == "WackyBarsMouseHyperEdge2"
+		and overrides.BUTTON3.click == "WackyBarsMouseHyperWheel")
+	check("... Shift + side and Alt + side are left as they are", overrides["SHIFT-F1"] == nil and overrides["ALT-F1"] == nil)
+	press(true)
+	check("... the key repeating changes nothing", overrides.F1 and bar.__shown)
+	press(false)
+	check("End up: the keys are the plain ones again (the wheel click its plain button's), the bar goes", overrides.F1 == nil
+		and overrides.BUTTON3 and overrides.BUTTON3.click == "WackyBarsMousePlainWheel" and overrides.END and not bar.__shown)
+	check("... the bar's own keys (Numpad) never touched", overrides.NUMPAD1 == nil)
+	DB.hidden.MouseHyperSide2 = true
+	SlashCmdList.WACKYBARS("status")
+	press(true)
+	check("a Hypershift spot you hid: its side key does nothing while held", overrides.F2 and overrides.F2.click == "WackyBarsNone")
+	press(false)
+	DB.hidden.MouseHyperSide2 = nil
+	DB.hyperAlways = true
+	SlashCmdList.WACKYBARS("status")
+	check("box unticked: the bar stays on screen, QuietHUD fades it again", bar.__shown and WackyBars_HyperOnHold() == false)
+	press(true)
+	check("... and End still turns the side keys into Hypershift's", overrides.F1 and overrides.F1.cmd == "MULTIACTIONBAR7BUTTON10"
+		and bar.__shown)
+	press(false)
+	check("... let go: still shown", bar.__shown)
+	DB.hyperAlways = nil
+	DB.off.MouseHyper = true
+	SlashCmdList.WACKYBARS("status")
+	check("Hypershift bar off: End is not taken", overrides.END == nil and hold.__attrs.count == 0)
+	DB.off.MouseHyper = nil
+	SlashCmdList.WACKYBARS("status")
+	WackyBars_ToggleMove()
+	check("Move bars: the Hypershift bar shows to be moved", bar.__shown)
+	WackyBars_ToggleMove()
+	check("... done: hidden again", not bar.__shown)
 end
 
 objMt.__index = baseIndex -- (the fake game as it was)

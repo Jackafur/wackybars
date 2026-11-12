@@ -212,7 +212,9 @@ for si, set in ipairs(SETS) do
 			layerIndex = li, short = set.short or L.short, arrows = {}, buttons = {},
 			-- (the Alt mouse bar goes with the plain mouse bar: his pick, Nov 10)
 			follow = (L.id == "Alt" and set.id == "Mouse") and "MousePlain" or L.follow }
-		local f = CreateFrame("Frame", "WackyBars" .. bar.id, container)
+		-- (the Hypershift bar is a protected frame of its own: Hold.lua shows it from secure code while Hypershift is held, in a
+		-- fight too; WackyBars itself only shows, hides, moves or sizes bars out of a fight)
+		local f = CreateFrame("Frame", "WackyBars" .. bar.id, container, set.id == "MouseHyper" and "SecureFrameTemplate" or nil)
 		f:SetMovable(true)
 		f:SetClampedToScreen(true)
 		bar.frame = f
@@ -2003,6 +2005,7 @@ local function stopModes()
 	showFull(false)
 	if QuietHUD_ShiftPause then pcall(QuietHUD_ShiftPause, false) end -- (QuietHUD's pixel shift goes on again)
 	if wasEditing then apply() end
+	runHooks(ns.wb and ns.wb.modeHooks)
 end
 local function startEdit()
 	if InCombatLockdown() then
@@ -2039,6 +2042,7 @@ local function startMove()
 	moveFrame:EnableKeyboard(true) -- (arrow keys for the selected bar; in the game's Edit Mode, Esc stays the game's)
 	drawGrid()
 	moveTip:SetShown(not inBlizzardEditMode)
+	runHooks(ns.wb and ns.wb.modeHooks) -- (Hold.lua: the Hypershift bar shows while you move it)
 end
 -- The game's Edit Mode: our boxes come up with it and go with it.
 local function hookBlizzardEditMode()
@@ -2504,14 +2508,15 @@ end
 -- For WackyBars' feature files, listed after this one in the TOC (the ideas he picked on Nov 10 night): what they may use
 -- and where they plug in, so each lives in a file of its own instead of editing this one. optionRows: a box each in /wbars
 -- ({ label, get, set }, set runs out of a fight, then the bars are applied again); slash: /wbars <word> = fn(rest);
--- lookHooks: after each look update; applyHooks: after each apply (out of a fight, everything in place).
+-- lookHooks: after each look update; applyHooks: after each apply (out of a fight, everything in place); modeHooks: after
+-- Move bars starts and after Move bars or Edit keys ends.
 ns.wb = {
 	buttons = buttons, bars = wbBars, db = function() return DB end, say = say,
 	part = part, art = art, mix = mix, gradOn = gradOn, span = span, tint = tint, colourOne = colourOne,
 	lookOf = lookOf, -- (the colour look picked, { id, name, from, to }, or nil for Default)
 	effKey = effKey, hotkeyText = hotkeyText, matchLook = matchLook, apply = apply, barOn = barOn,
 	editing = function() return editing end, moving = function() return moving end,
-	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {},
+	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {}, modeHooks = {},
 	port = port, -- (Profiles.lua: a profile that switches bars on or off hands out spare slots as the bar boxes do)
 }
 
