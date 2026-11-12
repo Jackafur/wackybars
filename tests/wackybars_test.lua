@@ -1901,7 +1901,6 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 	check("Hypershift held: End presses the hold button", overrides.END and overrides.END.click == "WackyBarsHyperHold")
 	check("... its bar is protected and hidden until End is down", bar.__template == "SecureFrameTemplate" and not bar.__shown
 		and refs.bar == bar)
-	check("... QuietHUD is told to leave it out of its fading", WackyBars_HyperOnHold() == true)
 	check("... up: side 1 (F1) still does its own job", overrides.F1 == nil)
 	press(true)
 	check("End down: the bar shows", bar.__shown)
@@ -1928,7 +1927,7 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 	DB.hidden.MouseHyperSide2 = nil
 	DB.hyperAlways = true
 	SlashCmdList.WACKYBARS("status")
-	check("box unticked: the bar stays on screen, QuietHUD fades it again", bar.__shown and WackyBars_HyperOnHold() == false)
+	check("box unticked: the bar stays on screen", bar.__shown)
 	press(true)
 	check("... and End still turns the side keys into Hypershift's", overrides.F1 and overrides.F1.cmd == "MULTIACTIONBAR7BUTTON10"
 		and bar.__shown)

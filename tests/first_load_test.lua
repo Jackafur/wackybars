@@ -52,8 +52,7 @@ M.fire("PLAYER_ENTERING_WORLD")
 M.flushTimers()
 local DB = WackyBarsCharDB
 check("the plain keyboard and the plain mouse show; Hypershift is on, shown only while held (Nov 12)", _G.WackyBarsPlain:IsShown()
-	and _G.WackyBarsMousePlain:IsShown() and not DB.off.MouseHyper and not _G.WackyBarsMouseHyper:IsShown()
-	and WackyBars_HyperOnHold() == true)
+	and _G.WackyBarsMousePlain:IsShown() and not DB.off.MouseHyper and not _G.WackyBarsMouseHyper:IsShown())
 check("the Shift, Ctrl and Alt copies are off (mouse over ones too)", DB.off.Shift and DB.off.Ctrl and DB.off.Alt and DB.off.MouseShift
 	and DB.off.MouseCtrl and DB.off.MouseAlt and not _G.WackyBarsShift:IsShown())
 check("WackyBars' own mouse over, fight, Lite and game bar settings are gone", DB.mouseover == nil and DB.combatHide == nil

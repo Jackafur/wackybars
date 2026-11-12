@@ -190,17 +190,6 @@ check("... and Bar 1 (no Mouse over only) stays down", h1.__alpha < 0.5)
 over = false
 run(4)
 check("mouse gone: both fade back", h4.__alpha < 0.5 and h8.__alpha < 0.5)
--- WackyBars' Hypershift bar shown only while Hypershift is held (its Hold.lua, Nov 12): QuietHUD leaves its holders alone, so
--- it comes up at full; back to always shown, it fades with Bar 8 again.
-local onHold = true
-rawset(_G, "WackyBars_HyperOnHold", function() return onHold end)
-QuietHUD_RefreshBarClicks()
-run(2)
-check("Hypershift shown while held: its holder at full, Bar 8 still faded", h8.__alpha == 1 and MultiBar7.__alpha < 0.5)
-onHold = false
-QuietHUD_RefreshBarClicks()
-run(2)
-check("... always shown again: it fades with Bar 8", h8.__alpha < 0.5 and h8.__alpha == MultiBar7.__alpha)
 -- Audit 2026-11-10 evening fixes.
 -- (1) QuietHUD switched off while the pet bar (own Shown) and a Show with bar are faded: every bar back at 1.
 QuietHUDDB.ovPetBar, QuietHUDDB.barPeek = 0.5, 511 - 1

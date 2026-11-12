@@ -3,8 +3,8 @@
 -- Wine can't see, like F13) into End in games (~/.config/xremap/config.yml, "games hypershift held"). While End is down,
 -- the plain mouse keys press the Hypershift bar's buttons: side 1 does what Hypershift side 1 shows, E1 and E2 and the wheel
 -- click do the Hypershift bar's E1, E2 and M. Let go, they are the plain ones again. With the box in /wbars ticked (the
--- default) the Hypershift bar shows only while End is held, and QuietHUD leaves it out of its fading
--- (WackyBars_HyperOnHold, read by QuietHUD's rebuild), so it comes up at full.
+-- default) the Hypershift bar shows only while End is held. QuietHUD fades it with the Action Bar 8 row as always, so it
+-- comes up at QuietHUD's opacity (his ask, Nov 12: "follows qhuds transparency").
 -- On the green and red profiles the mouse never sends End, so nothing here happens; untick the box there to keep the
 -- Hypershift bar on screen as before.
 -- In a fight too: the held key presses a secure button whose snippet sets and clears the keys (the game's override bindings,
@@ -56,10 +56,6 @@ local function onHold()
 	local hyper = bars()
 	return DB and hyper and wb.barOn(hyper) and not DB.hyperAlways or false
 end
--- QuietHUD asks this at its rebuild (WackyBars' apply calls QuietHUD_RefreshBarClicks): true, the Hypershift bar's holders
--- are left out of its fading.
-WackyBars_HyperOnHold = function() return onHold() and true or false end
-
 -- What the snippet needs, out of a fight, after each apply: per Hypershift spot, the plain mouse key of the same spot (the
 -- key the mouse really sends) and what it does while held.
 local function fill()

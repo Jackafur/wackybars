@@ -16,8 +16,8 @@ Your keys as action bars, placed like the keys (redesigned Nov 10). Shown by def
   hypershift held"; WoW under Wine can't see F14 or F13). While End is down, side 1 to 12, E1, E2 and the wheel click
   press the Hypershift bar's buttons at the same spots (a game bar slot through the game's own command, a spare slot by
   clicking the button, a hidden spot does nothing); let go, they are the plain keys again. Secure snippet, so it works in
-  a fight. Box in `/wbars`, ticked by default: the Hypershift bar shows only while End is held, and QuietHUD leaves it
-  out of its fading then (`WackyBars_HyperOnHold`). On green or red (no F14) untick it to keep the bar on screen. Edit
+  a fight. Box in `/wbars`, ticked by default: the Hypershift bar shows only while End is held, at
+  QuietHUD's opacity (it fades with the Action Bar 8 row like before). On green or red (no F14) untick it to keep the bar on screen. Edit
   keys and Move bars show it. Alt-tabbing out while holding it can leave it held: press it once more.
 
 **Off by default, a box each:** Shift, Ctrl and Alt copies of the keyboard and the mouse bars (the plan is married
