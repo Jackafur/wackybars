@@ -34,7 +34,7 @@ local BUTTON_CONFIG = {
 local tint -- (the look, below)
 local DB -- WackyBarsCharDB: keys = { [button id] = key or false }, spare = { [button id] = slot }, pos = { [bar id] = point },
 -- off = { [bar id] = true }, hidden = { [button id] = true }, sizes = { [bar id] = n (nil: 1) }, stagger, mods (labels show
--- the modifier), noSnap, noEdges, noWheel, told, v
+-- the modifier), noSnap, noEdges, noWheel, noCaps = { [layer id] = true }, told, v
 
 -- The modifier copies: each set (keyboard, mouse) is drawn once per layer. short: the letter in front of a label when the
 -- labels show their modifier (his "sQ, cQ, aQ", Nov 10; off by default: "i like the not showing the modifier key").
@@ -281,12 +281,15 @@ local function barOn(bar) return not (DB and DB.off[bar.id]) end
 local function hiddenButton(b) return DB and DB.hidden[b.wb.id] end
 -- The edge buttons and the wheel click can go from every bar at once (two boxes in the options, for a mouse without them:
 -- his ask, Nov 10, "someone should be able to turn off mmb and edge keys"). Gone: no key, no slot, the bar closes up.
-local function spotGone(S)
+-- The Caps key goes per bar, the same way (a Caps column in the options; his ask, Nov 13: Caps is his Interact key now,
+-- "i want to be able to hide the caps 2 key length key thing"). bar: the WackyBars bar the spot is drawn on.
+local function spotGone(S, bar)
 	if not DB then return false end
-	return (DB.noEdges and (S.name == "Edge1" or S.name == "Edge2")) or (DB.noWheel and S.name == "Wheel") or false
+	return (DB.noEdges and (S.name == "Edge1" or S.name == "Edge2")) or (DB.noWheel and S.name == "Wheel")
+		or (S.name == "Caps" and DB.noCaps and bar and bar.layerIndex and DB.noCaps[LAYERS[bar.layerIndex].id]) or false
 end
 local function active(b)
-	return (b.wb.slot ~= nil or b.wb.pet ~= nil) and barOn(b.wb.bar) and not hiddenButton(b) and not spotGone(b.wb.spot)
+	return (b.wb.slot ~= nil or b.wb.pet ~= nil) and barOn(b.wb.bar) and not hiddenButton(b) and not spotGone(b.wb.spot, b.wb.bar)
 end
 
 -- What a key does in your saved bindings: "mirror" (a game bar button: bar index, button number), "pet" (a pet bar key:
@@ -388,7 +391,7 @@ local function port()
 		for _, b in ipairs(buttons) do
 			local q = b.wb
 			if q.bar.layerIndex == li and q.kind ~= "mirror" and q.kind ~= "move" and q.kind ~= "pet" and not q.slot and barOn(q.bar)
-				and not hiddenButton(b) and not spotGone(q.spot) then
+				and not hiddenButton(b) and not spotGone(q.spot, q.bar) then
 				while pool[p] and (taken[pool[p]] or HasAction(pool[p])) do p = p + 1 end
 				if pool[p] then
 					q.slot, DB.spare[q.id], taken[pool[p]] = pool[p], pool[p], true
@@ -1121,7 +1124,7 @@ local function layout()
 	for _, bar in ipairs(wbBars) do
 		local minX, maxX, minRow, maxRow = math.huge, -math.huge, math.huge, 0
 		for _, S in ipairs(bar.set.spots) do
-			if not spotGone(S) and (not S.only or S.only[LAYERS[bar.layerIndex].id]) then
+			if not spotGone(S, bar) and (not S.only or S.only[LAYERS[bar.layerIndex].id]) then
 				minX = math.min(minX, spotX(bar, S))
 				maxX = math.max(maxX, spotX(bar, S) + (S.wide or 1) - 1)
 				minRow, maxRow = math.min(minRow, S.row), math.max(maxRow, S.row)
@@ -1408,13 +1411,13 @@ local function apply()
 		-- (a pet key's spot too, faint under its pet button, so Edit keys can reach it: the pet button is the game's, not in
 		-- WackyBars' list; audit Nov 10. Outside Edit keys the pet button shows by itself, empty slots too: placePets)
 		local hiddenEmpty = editing and (hiddenButton(b) or q.kind == "pet") and not q.slot and barOn(q.bar)
-			and not spotGone(q.spot)
+			and not spotGone(q.spot, q.bar)
 		if hiddenEmpty then
 			b:Show()
 			b:SetAlpha(0.35)
 			if tostring(b:GetAttribute("state")) ~= "0" then b:SetAttribute("state", "0") end
 			b:SetState("0", "empty")
-		elseif not q.slot or (hiddenButton(b) and not editing) or spotGone(q.spot) or not barOn(q.bar) then
+		elseif not q.slot or (hiddenButton(b) and not editing) or spotGone(q.spot, q.bar) or not barOn(q.bar) then
 			b:Hide()
 			-- (state 0 and empty, through the library, so a paged button switched off drops its old slot too; Codex audit)
 			if tostring(b:GetAttribute("state")) ~= "0" or b:GetAction("0") ~= "empty" then
@@ -1502,7 +1505,7 @@ local function summary()
 			elseif q.kind == "pet" then pets = pets + 1
 			elseif q.kind == "mirror" then mirror = mirror + 1
 			elseif q.slot then spare = spare + 1
-			elseif not hiddenButton(b) and not spotGone(q.spot) then none = none + 1 end
+			elseif not hiddenButton(b) and not spotGone(q.spot, q.bar) then none = none + 1 end
 			if q.kind == "other" then other[#other + 1] = q.def .. " (" .. q.other .. ")" end
 		end
 	end
@@ -2195,11 +2198,18 @@ local function toggleOptions()
 		text(20, -70, "Bars")
 		text(140, -72, "Keyboard", "GameFontHighlightSmall")
 		text(246, -72, "Mouse", "GameFontHighlightSmall")
+		text(330, -72, "Caps", "GameFontHighlightSmall")
 		for i, L in ipairs(LAYERS) do
 			local y = -84 - (i - 1) * 26
 			text(24, y - 6, L.mod == "" and "Plain" or L.id, "GameFontHighlight")
 			barBox(150, y, L.id)
 			barBox(246, y, "Mouse" .. L.id)
+			-- (the keyboard bar's two-wide Caps key: unticked, it's gone from that bar and the row closes up)
+			check(332, y, "", function() return not (DB.noCaps and DB.noCaps[L.id]) end, function(v)
+				DB.noCaps = DB.noCaps or {}
+				DB.noCaps[L.id] = (not v) or nil
+				if not next(DB.noCaps) then DB.noCaps = nil end
+			end)
 		end
 		local below = -84 - #LAYERS * 26
 		barBox(20, below, "MouseHyper", "Hypershift")

@@ -106,7 +106,8 @@ is not faded. Pixel shift moves the bars. WackyBars has no fade settings of its 
   types `\` (a custom KDE keyboard option), so the game never sees CAPSLOCK. Whatever you bind to `\` that isn't an
   action bar button (LockMenu) is left alone.
 - **Options:** `/wbars` (or a key in Key Bindings, WackyBars; also Esc, Options, AddOns): a box per bar (keyboard and
-  mouse side by side, a row each for Plain, Shift, Ctrl, Alt; Hypershift under them), staggered rows, show the modifier
+  mouse side by side, a row each for Plain, Shift, Ctrl, Alt; Hypershift under them), a Caps box per row (unticked: the
+  two-wide Caps key is gone from that bar and its row closes up; Nov 13, Caps became his Interact key), staggered rows, show the modifier
   in labels (`sQ`, `cQ`, `aQ`, `h1`; off by default, your pick), snap when moving bars, Edge buttons (E1, E2) and Wheel
   click button (on; off takes them out of every bar, for a mouse without them, and the bar closes up), Move bars,
   Edit keys, Reset places (places and sizes).

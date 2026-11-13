@@ -519,7 +519,7 @@ local boxes = {}
 for _, f in ipairs(M.frames) do
 	if f.__parent == _G.WackyBarsOptions and f.__template == "UICheckButtonTemplate" then boxes[#boxes + 1] = f end
 end
-local shiftBox = boxes[3] -- (Plain keyboard, Plain mouse, Shift keyboard, ...)
+local shiftBox = boxes[4] -- (Plain keyboard, Plain mouse, Plain Caps, Shift keyboard, ...)
 shiftBox.__scripts.OnClick(shiftBox)
 check("the Shift keyboard box switches that bar off", DB.off.Shift and not _G.WackyBarsShift:IsShown())
 shiftBox.__scripts.OnClick(shiftBox)
@@ -549,6 +549,20 @@ check("the mouse bar closes up (one row less, no column on the left)", _G.WackyB
 DB.noEdges, DB.noWheel = nil, nil
 SlashCmdList.WACKYBARS("status")
 check("back on: they come back", _G.WackyBarsMousePlainWheel.__shown and _G.WackyBarsMousePlain.__h == h0)
+
+-- The Caps key off per bar (the Caps column): gone from that bar only, its row closes up, no key, no spare slot.
+local capsBox = boxes[3]
+local w0, a0, sw0 = _G.WackyBarsPlain.__w, x("WackyBarsPlainA"), _G.WackyBarsShift.__w
+check("the Caps column starts ticked", capsBox.__checked ~= false and DB.noCaps == nil)
+capsBox.__scripts.OnClick(capsBox)
+check("Plain's Caps box unticked: DB.noCaps.Plain", DB.noCaps and DB.noCaps.Plain == true and not DB.noCaps.Shift)
+check("Caps gone from the plain bar, the Shift bar keeps its own", not _G.WackyBarsPlainCaps.__shown and _G.WackyBarsShift.__w == sw0)
+check("the plain bar closes up (A moves left, the bar gets narrower)", x("WackyBarsPlainA") < a0
+	and _G.WackyBarsPlain.__w < w0)
+check("no spare slot or key for the gone Caps", DB.spare.PlainCaps == nil and overrides["\\"] == nil)
+capsBox.__scripts.OnClick(capsBox)
+check("ticked again: back, DB.noCaps cleared", _G.WackyBarsPlainCaps.__shown and DB.noCaps == nil
+	and _G.WackyBarsPlain.__w == w0)
 
 -- Labels with their modifier (a box, off by default).
 check("by default the Shift bar reads E (no s)", _G.WackyBarsShiftE.HotKey.__text == "E")
