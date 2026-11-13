@@ -1,5 +1,7 @@
 # WackyBars
 
+<img src="assets/icon-512.png" alt="WackyBars icon" width="128" align="right">
+
 Your keys as action bars, placed like the keys (redesigned Nov 10). Shown by default:
 
 - **Keyboard:** the rows `1 2 3 4 5 6` / `Q W E R T Y` / `Caps A S D F G H` / `Z X C V` + Shift wheel up, Shift wheel
