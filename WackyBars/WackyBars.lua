@@ -78,7 +78,7 @@ do
 	-- option), so the game sees \, not CAPSLOCK: the button is that key (his ask, Nov 10).
 	KEYBOARD[#KEYBOARD + 1] = { key = "\\", name = "Caps", label = "Caps", x = -1, sx = -0.25, row = 2, wide = 2 }
 end
--- The Naga Pro in his `wow` profile (notebook Keyboard or keypad): the side grid, 3 by 4, sends F1, F2, F3, Page Down, F5 to
+-- The Naga Pro in a `wow` profile: the side grid, 3 by 4, sends F1, F2, F3, Page Down, F5 to
 -- F10, -, =; the two buttons left of left click (the edge buttons, Numpad * and /) stand in a column left of the grid, E1 on
 -- top (his layout, Nov 10, kept: "E1 and E2 should stay vertical"); above side 2, full size, the wheel click, as on the
 -- mouse. Shift and Ctrl + wheel click are on the Shift and Ctrl copies, where they belong (his ask, Nov 10, after a night
@@ -2214,7 +2214,7 @@ local function toggleOptions()
 		local below = -84 - #LAYERS * 26
 		barBox(20, below, "MouseHyper", "Hypershift")
 		-- (how each bar fades, shows on mouse over, with the whole HUD or lets clicks through: QuietHUD's Action bars page,
-		-- where each row is named after the WackyBars bars on it; one place for all of it, the owner, Nov 10)
+		-- where each row is named after the WackyBars bars on it; one place for all of it)
 		text(24, below - 26, "How bars fade and show: QuietHUD (if installed), Action bars page.", "GameFontHighlightSmall")
 		below = below - 56
 		check(20, below, "Staggered keyboard rows", function() return DB.stagger end, function(v) DB.stagger = v or nil end)
