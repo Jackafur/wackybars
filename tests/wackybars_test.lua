@@ -335,6 +335,35 @@ edit.__scripts.OnKeyDown(edit, "ESCAPE")
 check("Esc on a key clears it", DB.keys.ShiftQ == false and overrides["SHIFT-H"] == nil)
 edit.__scripts.OnKeyDown(edit, "Q")
 check("plain Q onto Shift + Q's button moves Q off the plain bar", DB.keys.PlainQ == false and overrides.Q.cmd == "MULTIACTIONBAR3BUTTON1")
+-- A wheel key on a button that is not its own reads as on its own button, not as the game's long name cut off (the owner,
+-- Nov 18: Shift + wheel up bound on the button beside G read "s-...")
+rawset(_G.WackyBarsShiftQ, "IsMouseOver", function() return false end)
+rawset(_G.WackyBarsPlainG, "IsMouseOver", function() return true end)
+edit.__scripts.OnUpdate(edit)
+shift = true
+edit.__scripts.OnMouseWheel(edit, 1)
+check("Shift + wheel up on G's button reads sWU", DB.keys.PlainG == "SHIFT-MOUSEWHEELUP" and _G.WackyBarsPlainG.HotKey.__text == "sWU")
+check("... and its own button after V lost the key", DB.keys.PlainWheelUp == false and _G.WackyBarsPlainWheelUp.HotKey.__text == "*")
+edit.__scripts.OnMouseWheel(edit, -1)
+check("Shift + wheel down there reads sWD", _G.WackyBarsPlainG.HotKey.__text == "sWD")
+edit.__scripts.OnKeyDown(edit, "H")
+check("any other key keeps the game's own short text", _G.WackyBarsPlainG.HotKey.__text == "SHIFT-H")
+shift = false
+-- (back as they were: G on its own button, the two wheel keys on theirs)
+edit.__scripts.OnKeyDown(edit, "G")
+rawset(_G.WackyBarsPlainG, "IsMouseOver", function() return false end)
+for name, delta in pairs({ WackyBarsPlainWheelUp = 1, WackyBarsPlainWheelDown = -1 }) do
+	rawset(_G[name], "IsMouseOver", function() return true end)
+	edit.__scripts.OnUpdate(edit)
+	shift = true
+	edit.__scripts.OnMouseWheel(edit, delta)
+	shift = false
+	rawset(_G[name], "IsMouseOver", function() return false end)
+end
+edit.__scripts.OnUpdate(edit)
+check("put back: G, sWU and sWD on their own buttons", DB.keys.PlainG == nil and DB.keys.PlainWheelUp == nil
+	and DB.keys.PlainWheelDown == nil and _G.WackyBarsPlainWheelUp.HotKey.__text == "sWU"
+	and _G.WackyBarsPlainWheelDown.HotKey.__text == "sWD" and _G.WackyBarsPlainG.HotKey.__text == "G")
 rawset(_G.WackyBarsShiftQ, "IsMouseOver", function() return false end)
 edit.__scripts.OnUpdate(edit)
 edit.__scripts.OnKeyDown(edit, "ESCAPE")

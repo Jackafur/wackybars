@@ -407,10 +407,20 @@ local function label(b)
 	if DB and DB.mods and not S.fixedMod and bar.short ~= "" then return bar.short .. S.label end
 	return S.label
 end
+-- A key on a button that is not its own is written with the game's short text, except the wheel: the game's
+-- "s-Mouse Wheel Up" does not fit a button and was cut to "s-..." (the owner, Nov 18, Shift + wheel up bound on the button
+-- beside G: "any idea why the top button shows S-... instead of SWup"). It reads as on its own buttons, sWU and sWD, with
+-- c and a for Ctrl and Alt. (All inside this function: the file is at Lua's limit of 200 locals.)
 local function hotkeyText(b)
 	local k = effKey(b)
 	if not k then return nil end
-	return k == b.wb.def and label(b) or GetBindingText(k, 1)
+	if k == b.wb.def then return label(b) end
+	local mods, wheel = k:match("^(.-)MOUSEWHEEL(%u+)$")
+	if wheel == "UP" or wheel == "DOWN" then
+		local short = mods:gsub("SHIFT%-", "s"):gsub("CTRL%-", "c"):gsub("ALT%-", "a")
+		return short .. (wheel == "UP" and "WU" or "WD")
+	end
+	return GetBindingText(k, 1)
 end
 local function hotkey(b)
 	local hk = b.HotKey
