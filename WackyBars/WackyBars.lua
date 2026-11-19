@@ -415,6 +415,9 @@ local function hotkeyText(b)
 	local k = effKey(b)
 	if not k then return nil end
 	if k == b.wb.def then return label(b) end
+	-- (his Caps key sends Page Up inside games, xremap, since Nov 13: bound on the Caps button it still reads Caps, not the
+	-- game's "Page Up" cut off to "Pa..."; the owner, Nov 18: "can make it so this still says caps")
+	if b.wb.spot.name == "Caps" and k:match("PAGEUP$") then return label(b) end
 	local mods, wheel = k:match("^(.-)MOUSEWHEEL(%u+)$")
 	if wheel == "UP" or wheel == "DOWN" then
 		local short = mods:gsub("SHIFT%-", "s"):gsub("CTRL%-", "c"):gsub("ALT%-", "a")
