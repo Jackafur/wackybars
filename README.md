@@ -111,6 +111,8 @@ is not faded. Pixel shift moves the bars. WackyBars has no fade settings of its 
   in labels (`sQ`, `cQ`, `aQ`, `h1`; off by default, your pick), snap when moving bars, Edge buttons (E1, E2) and Wheel
   click button (on; off takes them out of every bar, for a mouse without them, and the bar closes up), Move bars,
   Edit keys, Reset places (places and sizes).
+  Switching Caps, the edges, the wheel click or the stagger on or off leaves the other keys where they are on the
+  screen: the bar's place moves instead (Nov 19; before, they slid over by a key, into the bar beside).
 - **Size, each bar its own:** in Move bars, click a bar: a slider (50% to 200%, steps of 5, with - and +) sizes that bar,
   its top left corner staying put, like Edit Mode's Icon Size. `/wbars scale <n>` sets every bar at once, `auto` puts
   them all back to 100%. The one size of before became each bar's size on the first load.

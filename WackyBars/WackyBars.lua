@@ -1196,6 +1196,23 @@ local function layout()
 			copy.defaultPoint = { "BOTTOMLEFT", "BOTTOM", left + step, midY - h / 2 - step }
 		end
 	end
+	-- A spot switched on or off (Caps, the edge buttons, the wheel click, the stagger) moves where a bar's first
+	-- column and top row start, while the bar keeps its saved place, so every other key slid by a key (his Nov 19
+	-- screenshot: Caps back on pushed the keyboard's 6 and Y into the mouse bar's E1 and E2). The saved place moves the
+	-- other way by as much, so the keys stay where they were on the screen. Only on a change while playing: a reload
+	-- leaves every place as saved.
+	for _, bar in ipairs(wbBars) do
+		local d, last, p = dims[bar], bar.wbLast, DB.pos[bar.id]
+		local changed = last and (last.minX ~= d.minX or last.minRow ~= d.minRow or last.w ~= d.w or last.h ~= d.h)
+		if changed and p and last.u == u then
+			local pt = type(p[1]) == "string" and p[1] or ""
+			local ax = pt:find("LEFT") and 0 or (pt:find("RIGHT") and 1 or 0.5) -- (how far across its anchor is)
+			local ty = pt:find("TOP") and 0 or (pt:find("BOTTOM") and 1 or 0.5) -- (how far down)
+			p[3] = p[3] + (d.minX - last.minX) * u + ax * (d.w - last.w)
+			p[4] = p[4] - (d.minRow - last.minRow) * u - ty * (d.h - last.h)
+		end
+		bar.wbLast = { minX = d.minX, minRow = d.minRow, w = d.w, h = d.h, u = u }
+	end
 	for _, bar in ipairs(wbBars) do
 		local p = DB.pos[bar.id]
 		local f = bar.frame

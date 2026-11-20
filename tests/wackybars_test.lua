@@ -607,6 +607,37 @@ check("no spare slot or key for the gone Caps", DB.spare.PlainCaps == nil and ov
 capsBox.__scripts.OnClick(capsBox)
 check("ticked again: back, DB.noCaps cleared", _G.WackyBarsPlainCaps.__shown and DB.noCaps == nil
 	and _G.WackyBarsPlain.__w == w0)
+-- The other keys stay where they are on the screen when Caps, the edges or the wheel click go or come back (his Nov 19
+-- screenshot: Caps back on pushed the keyboard into the mouse bar). The bar's saved place moves the other way instead.
+DB.pos.Plain = { "TOPLEFT", "BOTTOMLEFT", 100, 500 }
+SlashCmdList.WACKYBARS("status")
+local aAt = DB.pos.Plain[3] + x("WackyBarsPlainA")
+capsBox.__scripts.OnClick(capsBox)
+check("Caps off: A stays put on the screen (the place moved right by what the row closed up)",
+	math.abs(DB.pos.Plain[3] + x("WackyBarsPlainA") - aAt) < 0.01 and DB.pos.Plain[3] > 100 and DB.pos.Plain[4] == 500)
+capsBox.__scripts.OnClick(capsBox)
+check("Caps back on: A still put, the place back where it was", math.abs(DB.pos.Plain[3] + x("WackyBarsPlainA") - aAt) < 0.01
+	and math.abs(DB.pos.Plain[3] - 100) < 0.01)
+DB.pos.MousePlain = { "CENTER", "CENTER", 0, 0 }
+SlashCmdList.WACKYBARS("status")
+local function side1()
+	local f = _G.WackyBarsMousePlain
+	local p = DB.pos.MousePlain
+	return p[3] - f.__w / 2 + x("WackyBarsMousePlainSide1"), p[4] + f.__h / 2 + y("WackyBarsMousePlainSide1")
+end
+local sx0, sy0 = side1()
+DB.noEdges, DB.noWheel = true, true
+SlashCmdList.WACKYBARS("status")
+local sx1, sy1 = side1()
+check("edges and wheel click off, a bar placed by its middle: side 1 stays put both ways",
+	math.abs(sx1 - sx0) < 0.01 and math.abs(sy1 - sy0) < 0.01)
+DB.noEdges, DB.noWheel = nil, nil
+SlashCmdList.WACKYBARS("status")
+local sx2, sy2 = side1()
+check("... and back on", math.abs(sx2 - sx0) < 0.01 and math.abs(sy2 - sy0) < 0.01 and math.abs(DB.pos.MousePlain[3]) < 0.01
+	and math.abs(DB.pos.MousePlain[4]) < 0.01)
+DB.pos.Plain, DB.pos.MousePlain = nil, nil
+SlashCmdList.WACKYBARS("status")
 
 -- Labels with their modifier (a box, off by default).
 check("by default the Shift bar reads E (no s)", _G.WackyBarsShiftE.HotKey.__text == "E")
