@@ -1200,16 +1200,26 @@ local function layout()
 	-- column and top row start, while the bar keeps its saved place, so every other key slid by a key (his Nov 19
 	-- screenshot: Caps back on pushed the keyboard's 6 and Y into the mouse bar's E1 and E2). The saved place moves the
 	-- other way by as much, so the keys stay where they were on the screen. Only on a change while playing: a reload
-	-- leaves every place as saved.
+	-- leaves every place as saved. Those switches are the same in every bar profile (Profiles.lua) while each profile
+	-- keeps its own places, so each saved profile's place for the bar moves the same way: switching to another profile
+	-- after Caps went off slid its keys by a key (audit Nov 23). A place is in the bar's own units: its size is no matter.
+	local function keepPut(p, d, last)
+		if type(p) ~= "table" or type(p[3]) ~= "number" or type(p[4]) ~= "number" then return end
+		local pt = type(p[1]) == "string" and p[1] or ""
+		local ax = pt:find("LEFT") and 0 or (pt:find("RIGHT") and 1 or 0.5) -- (how far across its anchor is)
+		local ty = pt:find("TOP") and 0 or (pt:find("BOTTOM") and 1 or 0.5) -- (how far down)
+		p[3] = p[3] + (d.minX - last.minX) * u + ax * (d.w - last.w)
+		p[4] = p[4] - (d.minRow - last.minRow) * u - ty * (d.h - last.h)
+	end
 	for _, bar in ipairs(wbBars) do
 		local d, last, p = dims[bar], bar.wbLast, DB.pos[bar.id]
 		local changed = last and (last.minX ~= d.minX or last.minRow ~= d.minRow or last.w ~= d.w or last.h ~= d.h)
-		if changed and p and last.u == u then
-			local pt = type(p[1]) == "string" and p[1] or ""
-			local ax = pt:find("LEFT") and 0 or (pt:find("RIGHT") and 1 or 0.5) -- (how far across its anchor is)
-			local ty = pt:find("TOP") and 0 or (pt:find("BOTTOM") and 1 or 0.5) -- (how far down)
-			p[3] = p[3] + (d.minX - last.minX) * u + ax * (d.w - last.w)
-			p[4] = p[4] - (d.minRow - last.minRow) * u - ty * (d.h - last.h)
+		if changed and last.u == u then
+			keepPut(p, d, last)
+			for _, prof in ipairs(type(DB.profiles) == "table" and DB.profiles or {}) do
+				local pp = type(prof) == "table" and type(prof.pos) == "table" and prof.pos[bar.id]
+				if pp and pp ~= p then keepPut(pp, d, last) end
+			end
 		end
 		bar.wbLast = { minX = d.minX, minRow = d.minRow, w = d.w, h = d.h, u = u }
 	end

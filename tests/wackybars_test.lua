@@ -1559,6 +1559,48 @@ do
 	SlashCmdList.WACKYBARS("status")
 end
 
+-- Two profiles and a shared switch (audit Nov 23): Caps, the edges, the wheel click and the stagger are the same in every
+-- profile, while each profile keeps its own places. Caps switched off on one profile: switching to the other, its keys are
+-- where they were too (before, only the places in use moved, so the other profile's keys slid by a key).
+do
+	local pick, P = _G.WackyBarsProfilePick, StaticPopupDialogs.WACKYBARS_PROFILE
+	local function dialogSays(text) return { GetEditBox = function() return { GetText = function() return text end } end } end
+	local pos0, sizes0, off0 = M.copy(DB.pos), M.copy(DB.sizes), M.copy(DB.off)
+	-- (where the keyboard's A sits, in the bar's own units from the screen point its place hangs on; a bar by its right edge
+	-- would keep its keys anyway, as Caps is on the left)
+	local function aFrom(p) return p[3] + x("WackyBarsPlainA") end
+	DB.pos.Plain = { "TOPLEFT", "BOTTOMLEFT", 100, 500 }
+	SlashCmdList.WACKYBARS("status")
+	P.OnAccept(dialogSays("Questing"))
+	P.OnAccept(dialogSays("Raid"))
+	-- on Raid: the keyboard somewhere else, at 150%
+	DB.pos.Plain = { "TOPLEFT", "BOTTOMLEFT", 300, 600 }
+	DB.sizes.Plain = 1.5
+	SlashCmdList.WACKYBARS("status")
+	local raidA = aFrom(DB.pos.Plain)
+	pick.__scripts.OnClick(pick)
+	local questA = aFrom(DB.pos.Plain)
+	check("two profiles: Questing and Raid (the keyboard elsewhere, at 150%), on Questing",
+		DB.profile == "Questing" and DB.pos.Plain[3] == 100 and _G.WackyBarsPlain.__scale == 1)
+	capsBox.__scripts.OnClick(capsBox)
+	check("Caps off on Questing: its A stays put", DB.noCaps and DB.noCaps.Plain == true
+		and math.abs(aFrom(DB.pos.Plain) - questA) < 0.01 and DB.pos.Plain[3] > 100)
+	pick.__scripts.OnClick(pick)
+	check("... switched to Raid: Raid's A is where it was too (its saved place moved the same way)", DB.profile == "Raid"
+		and _G.WackyBarsPlain.__scale == 1.5 and math.abs(aFrom(DB.pos.Plain) - raidA) < 0.01 and DB.pos.Plain[3] > 300
+		and DB.pos.Plain[4] == 600)
+	capsBox.__scripts.OnClick(capsBox)
+	check("Caps back on, now on Raid: Raid's A still put, its place back", DB.noCaps == nil
+		and math.abs(aFrom(DB.pos.Plain) - raidA) < 0.01 and math.abs(DB.pos.Plain[3] - 300) < 0.01)
+	pick.__scripts.OnClick(pick)
+	check("... and Questing's: back at its first place, A where it was", DB.profile == "Questing"
+		and math.abs(DB.pos.Plain[3] - 100) < 0.01 and math.abs(aFrom(DB.pos.Plain) - questA) < 0.01)
+	P.OnAlt(dialogSays("Raid"))
+	P.OnAlt(dialogSays("Questing"))
+	DB.pos, DB.sizes, DB.off, DB.profiles = pos0, sizes0, off0, nil
+	SlashCmdList.WACKYBARS("status")
+end
+
 -- Panic flash (Panic.lua, his "not a bad idea either"): in a fight, under 30% health, the buttons holding an escape spell (by
 -- name, any rank), a Healthstone or a healing potion pulse; the game sets their opacity from a step curve over your health
 -- (hidden from addons); one box in /wbars switches it off.
