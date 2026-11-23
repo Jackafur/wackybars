@@ -44,6 +44,8 @@ local function isEscape(name)
 		for _, n in ipairs(ESCAPES[class] or {}) do escapes[n] = true end
 	end
 	if escapes[name] then return true end
+	-- (the warlock's Create Healthstone spell, every rank, holds the word but is not the stone: audit Nov 10, F3)
+	if name:sub(1, 7) == "Create " then return false end
 	for _, part in ipairs(ANY_CLASS) do
 		if name:find(part, 1, true) then return true end
 	end

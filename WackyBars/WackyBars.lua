@@ -1519,8 +1519,10 @@ local function apply()
 	-- they missed QuietHUD's hover until the next loading screen; audit Nov 10)
 	if QuietHUD_RefreshBarClicks then QuietHUD_RefreshBarClicks() end
 	gameBars()
-	matchLook()
+	-- (an error in matchLook must not leave applying on, or UPDATE_BINDINGS is ignored until a reload: look audit Nov 10, #3)
+	local lookOk, lookErr = pcall(matchLook)
 	applying = false
+	if not lookOk and geterrorhandler then geterrorhandler()(lookErr) end
 	if refreshOptions then refreshOptions() end
 	if moving and refreshMovers then refreshMovers() end
 	runHooks(ns.wb and ns.wb.applyHooks) -- (the feature files, after everything is in place)

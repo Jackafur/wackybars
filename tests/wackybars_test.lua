@@ -1632,6 +1632,15 @@ do
 	M.fire("GET_ITEM_INFO_RECEIVED", 5510, true)
 	M.flushTimers()
 	check("... and pulses once the game has it (then stops waiting)", pulsing(B) and not listening("GET_ITEM_INFO_RECEIVED"))
+	-- the warlock's Create Healthstone holds the word but is not the stone (audit Nov 10, F3)
+	spells[6202] = "Create Healthstone"
+	info[slotOf(C)] = { "spell", 6202 }
+	M.fire("ACTIONBAR_SLOT_CHANGED", slotOf(C))
+	M.flushTimers()
+	check("... Create Healthstone doesn't pulse, the stone still does", not pulsing(C) and pulsing(B))
+	info[slotOf(C)] = { "spell", 686 }
+	M.fire("ACTIONBAR_SLOT_CHANGED", slotOf(C))
+	M.flushTimers()
 	local gate, tex, g = pulse(A)
 	check("... the game's spell highlight, looping 0.35 s up and down at half strength, tinted with the bar's gradient",
 		tex.__blend == "ADD" and g.__loop == "REPEAT" and g.__anims[1].__to == 0.5 and g.__anims[1].__dur == 0.35
