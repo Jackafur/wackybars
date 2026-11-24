@@ -112,6 +112,9 @@ local function refresh(b)
 	local on = cmd and not edited and not slotFull(b)
 	labelled[b] = on and true or nil
 	local job = on and (mpic and { icon = mpic } or JOBS[cmd])
+	-- autorun or follow on a movement key's copy (Alt + E, Alt + F): the picture with that key's direction in it
+	local dir = job and not mpic and COMBOS[cmd] and b.wb.mod ~= "" and wb.bareDir(b.wb)
+	if dir then job = { icon = DIR .. COMBOS[cmd] .. "-" .. dir } end
 	if not job then
 		if pics[b] then pics[b]:Hide() end
 	else
@@ -193,5 +196,5 @@ wb.optionRows[#wb.optionRows + 1] = {
 	set = function(v) wb.db().moveIcons = v and true or nil end,
 }
 
-ns.wb.jobs = { list = JOBS, showing = showing, pic = function(b) return pics[b] end,
+ns.wb.jobs = { combos = COMBOS, list = JOBS, showing = showing, pic = function(b) return pics[b] end,
 	tag = function(b) return tags[b] end } -- (for the tests)

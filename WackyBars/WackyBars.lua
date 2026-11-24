@@ -353,9 +353,10 @@ local function moveDir(q)
 	-- (a key set to NONE in Key Bindings does nothing, so it does not fall back to the bare key)
 	-- (a modifier key bound to something that is not a bar button, like Ctrl + S's Toggle Sound, shows the bare key's arrow:
 	-- his ask, Nov 10)
-	-- (also a job with its own picture: autorun on Alt + E keeps E's arrow. Tried Nov 24, the boot there and then the boot
-	-- with a small arrow in its corner; his "nah it still looks weird")
-	if q.mod ~= "" and (c == "" or (c ~= "NONE" and parse(c) == "other" and not MOVES[c])) then
+	-- (except autorun and follow, which have a picture drawn with the key's direction in it, Jobs.lua COMBOS: his "your auto
+	-- run and follow icons arent on my alt menu", Nov 24, after a plain boot there "looked weird")
+	local combo = ns.wb and ns.wb.jobs and ns.wb.jobs.combos[c]
+	if q.mod ~= "" and (c == "" or (c ~= "NONE" and parse(c) == "other" and not MOVES[c] and not combo)) then
 		c = GetBindingAction(q.spot.key) or ""
 	end
 	return MOVES[c]
@@ -2593,6 +2594,12 @@ ns.wb = {
 	editing = function() return editing end, moving = function() return moving end,
 	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {}, modeHooks = {},
 	port = port, -- (Profiles.lua: a profile that switches bars on or off hands out spare slots as the bar boxes do)
+	-- (Jobs.lua: the way a button's bare key moves you, for autorun or follow drawn with that direction)
+	bareDir = function(q)
+		local forced = DB and DB.moveKeys and FORCED_MOVES[DB.moveKeys]
+		if forced then return forced[q.spot.key] end
+		return q.spot.key and MOVES[GetBindingAction(q.spot.key) or ""] or nil
+	end,
 }
 
 -- Fill empty pet slots (his "fine then make a button that does it", Nov 10 night). Each demon keeps its own pet bar in the

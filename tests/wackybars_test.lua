@@ -2169,17 +2169,24 @@ do
 	local eWas, aeWas = binds.E, binds["ALT-E"]
 	binds.E, binds["ALT-E"] = "MOVEFORWARD", "TOGGLEAUTORUN"
 	M.fire("UPDATE_BINDINGS")
-	check("Alt + E autorun (E moves you): E's arrow, no button", AE.wb.arrowTex.__shown and not AE.__shown)
 	local tg = wbNs.wb.jobs.tag(AE)
-	check("... with AUTO under the arrow (his \"stylized AUTO\")", tg and tg.__shown and tg.__text == "AUTO")
+	check("Alt + E autorun (E moves you): the boot with an up chevron, no faint arrow (his \"autorun ... icons arent on my alt menu\")",
+		AE.__shown and pic(AE) and pic(AE).wbIcon:match("autorun%-up$") and not AE.wb.arrowTex.__shown and not (tg and tg.__shown))
+	local AF = _G.WackyBarsAltF
+	local fWas, afWas = binds.F, binds["ALT-F"]
+	binds.F, binds["ALT-F"] = "STRAFERIGHT", "FOLLOWTARGET"
+	M.fire("UPDATE_BINDINGS")
+	check("... Alt + F follow (F strafes right): footprints with a right chevron", AF.__shown and pic(AF)
+		and pic(AF).wbIcon:match("follow%-right$"))
+	binds.F, binds["ALT-F"] = fWas, afWas
+	M.fire("UPDATE_BINDINGS")
 	-- Movement keys as icons (the box): E an arrow picture, Alt + E autorun the boot with an up chevron, no faint arrows, no AUTO
 	DB.moveIcons = true
 	SlashCmdList.WACKYBARS("status")
 	local PE = _G.WackyBarsPlainE
 	check("Movement keys as icons: E shows the up arrow picture, the faint arrow is gone", PE.__shown and pic(PE)
 		and pic(PE).__shown and pic(PE).wbIcon:match("move%-up$") and not PE.wb.arrowTex.__shown and PE.HotKey.__text == "E")
-	check("... Alt + E autorun: the boot with an up chevron, no AUTO", AE.__shown and pic(AE).wbIcon:match("autorun%-up$")
-		and not (tg and tg.__shown))
+	check("... Alt + E autorun: the boot with an up chevron", AE.__shown and pic(AE).wbIcon:match("autorun%-up$"))
 	check("... E's key itself is left alone (no override)", overrides.E == nil and overrides["ALT-E"] == nil)
 	DB.moveIcons = nil
 	SlashCmdList.WACKYBARS("status")
