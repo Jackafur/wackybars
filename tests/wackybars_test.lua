@@ -2172,6 +2172,18 @@ do
 	check("Alt + E autorun (E moves you): E's arrow, no button", AE.wb.arrowTex.__shown and not AE.__shown)
 	local tg = wbNs.wb.jobs.tag(AE)
 	check("... with AUTO under the arrow (his \"stylized AUTO\")", tg and tg.__shown and tg.__text == "AUTO")
+	-- Movement keys as icons (the box): E an arrow picture, Alt + E autorun the boot with an up chevron, no faint arrows, no AUTO
+	DB.moveIcons = true
+	SlashCmdList.WACKYBARS("status")
+	local PE = _G.WackyBarsPlainE
+	check("Movement keys as icons: E shows the up arrow picture, the faint arrow is gone", PE.__shown and pic(PE)
+		and pic(PE).__shown and pic(PE).wbIcon:match("move%-up$") and not PE.wb.arrowTex.__shown and PE.HotKey.__text == "E")
+	check("... Alt + E autorun: the boot with an up chevron, no AUTO", AE.__shown and pic(AE).wbIcon:match("autorun%-up$")
+		and not (tg and tg.__shown))
+	check("... E's key itself is left alone (no override)", overrides.E == nil and overrides["ALT-E"] == nil)
+	DB.moveIcons = nil
+	SlashCmdList.WACKYBARS("status")
+	check("... box unticked: the faint arrows again", PE.wb.arrowTex.__shown and not PE.__shown)
 	binds.E, binds["ALT-E"] = eWas, aeWas
 	M.fire("UPDATE_BINDINGS")
 	check("the Alt bar has B, N and a 4-wide Space (Alt + B, Alt + N, Alt + Space)", _G.WackyBarsAltB.wb.def == "ALT-B"

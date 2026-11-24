@@ -43,6 +43,18 @@ local function cmdOf(b)
 	local q = b.wb
 	return q and (q.kind == "other" or q.kind == "job") and q.other or nil
 end
+-- Movement keys as icons (a box, off unless ticked; his "remove the regular arrows, do icons again, but include the movement
+-- key in the icon", Nov 24): a key that moves you shows an arrow picture by its direction (so WASD or ESDF both fit); a
+-- modifier copy of one with a job (autorun on Alt + E, follow on Alt + F) shows the job with a chevron on that side.
+local MOVE_NAMES = { up = "MOVEFORWARD", down = "MOVEBACKWARD", left = "STRAFELEFT", right = "STRAFERIGHT" }
+local COMBOS = { TOGGLEAUTORUN = "autorun", FOLLOWTARGET = "follow" }
+local function movePic(b)
+	local q, DB = b.wb, wb.db()
+	if not (DB and DB.moveIcons and q.kind == "move" and q.move) then return nil end
+	local cmd = q.mod ~= "" and q.def and GetBindingAction(q.def) or ""
+	if COMBOS[cmd] then return DIR .. COMBOS[cmd] .. "-" .. q.move, cmd end
+	return DIR .. "move-" .. q.move, MOVE_NAMES[q.move]
+end
 local function slotFull(b)
 	local s = b.wb.kind ~= "job" and b.wb.slot
 	return s and HasAction(s) and true or false
@@ -64,7 +76,7 @@ local function hook(b)
 	hooked[b] = true
 	-- the hover: the job's name and its key (Edit keys keeps its own tip)
 	b:HookScript("OnEnter", function(self)
-		local cmd = cmdOf(self)
+		local cmd = cmdOf(self) or select(2, movePic(self))
 		if not (cmd and labelled[self]) or wb.editing() then return end
 		if GameTooltip_SetDefaultAnchor then GameTooltip_SetDefaultAnchor(GameTooltip, self)
 		else GameTooltip:SetOwner(self, "ANCHOR_RIGHT") end
@@ -92,13 +104,14 @@ local function picOf(b)
 end
 
 local function refresh(b)
-	local cmd = b:IsShown() and cmdOf(b)
+	local mpic, mcmd = movePic(b)
+	local cmd = b:IsShown() and (cmdOf(b) or mcmd)
 	-- (a button you gave a key, or cleared, in Edit keys is yours: it shows what you set there)
 	local DB = wb.db()
 	local edited = DB and DB.keys and DB.keys[b.wb.id] ~= nil
 	local on = cmd and not edited and not slotFull(b)
 	labelled[b] = on and true or nil
-	local job = on and JOBS[cmd]
+	local job = on and (mpic and { icon = mpic } or JOBS[cmd])
 	if not job then
 		if pics[b] then pics[b]:Hide() end
 	else
@@ -173,6 +186,12 @@ watch:SetScript("OnEvent", function(_, _, slot)
 		end
 	end
 end)
+
+wb.optionRows[#wb.optionRows + 1] = {
+	label = "Movement keys as icons (else faint arrows)",
+	get = function() local DB = wb.db() return DB and DB.moveIcons and true or false end,
+	set = function(v) wb.db().moveIcons = v and true or nil end,
+}
 
 ns.wb.jobs = { list = JOBS, showing = showing, pic = function(b) return pics[b] end,
 	tag = function(b) return tags[b] end } -- (for the tests)

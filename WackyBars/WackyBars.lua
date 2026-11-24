@@ -1472,8 +1472,8 @@ local function apply()
 			b:SetAlpha(0.35)
 			if tostring(b:GetAttribute("state")) ~= "0" then b:SetAttribute("state", "0") end
 			b:SetState("0", "empty")
-		elseif (not q.slot and q.kind ~= "job") or (hiddenButton(b) and not editing) or spotGone(q.spot, q.bar)
-			or not barOn(q.bar) then
+		elseif (not q.slot and q.kind ~= "job" and not (q.kind == "move" and DB.moveIcons)) or (hiddenButton(b) and not editing)
+			or spotGone(q.spot, q.bar) or not barOn(q.bar) then
 			b:Hide()
 			-- (state 0 and empty, through the library, so a paged button switched off drops its old slot too; Codex audit)
 			if tostring(b:GetAttribute("state")) ~= "0" or b:GetAction("0") ~= "empty" then
@@ -1495,7 +1495,8 @@ local function apply()
 				paged[#paged + 1] = b
 			else
 				if tostring(b:GetAttribute("state")) ~= "0" then b:SetAttribute("state", "0") end
-				if q.kind == "job" then b:SetState("0", "empty") else b:SetState("0", "action", q.slot) end
+				-- (a job, or with Movement keys as icons a key that moves you: a picture, no slot; Jobs.lua)
+				if q.kind == "job" or q.kind == "move" then b:SetState("0", "empty") else b:SetState("0", "action", q.slot) end
 			end
 		end
 	end
@@ -1535,7 +1536,7 @@ local function apply()
 		local t = b.wb.arrowTex
 		if t then
 			if b.wb.move then pointArrow(t, b.wb.move) end
-			t:SetShown(b.wb.move ~= nil)
+			t:SetShown(b.wb.move ~= nil and not DB.moveIcons) -- (Movement keys as icons: Jobs.lua draws them instead)
 		end
 	end
 	sortForQuietHUD()

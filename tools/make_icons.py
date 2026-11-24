@@ -9,7 +9,12 @@ S = 512
 OUT = sys.argv[1]
 
 
+CLEAR = [False]  # True: radial() gives a clear canvas, vignette() does nothing (a job's symbol alone, for the combos)
+
+
 def radial(inner, outer, centre=(0.5, 0.45), power=1.3):
+    if CLEAR[0]:
+        return Image.new("RGBA", (S, S), (0, 0, 0, 0))
     img = Image.new("RGB", (S, S))
     px = img.load()
     cx, cy = centre[0] * S, centre[1] * S
@@ -49,6 +54,8 @@ def outline(mask, width):
 
 
 def vignette(img, strength=150):
+    if CLEAR[0]:
+        return
     v = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(v)
     for i in range(60):
@@ -294,8 +301,65 @@ def assist():
     return img
 
 
-for name, fn in (("interact", interact), ("assist", assist), ("clip", clip), ("downtime", downtime), ("hideui", hideui), ("follow", follow),
-                 ("sit", sit), ("autorun", autorun)):
+TURN = {"up": 0, "left": 90, "down": 180, "right": -90}
+
+
+def arrow_mask(direction, scale=1.0, centre=(S / 2, S / 2)):
+    """A chunky arrow pointing up, turned to `direction`."""
+    m = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(m)
+    cx, cy = centre
+    k = scale
+    d.polygon([(cx, cy - 190 * k), (cx + 170 * k, cy - 10 * k), (cx + 70 * k, cy - 10 * k), (cx + 70 * k, cy + 180 * k),
+               (cx - 70 * k, cy + 180 * k), (cx - 70 * k, cy - 10 * k), (cx - 170 * k, cy - 10 * k)], fill=255)
+    return m.rotate(TURN[direction], center=(S / 2, S / 2), resample=Image.BICUBIC)
+
+
+def chevron_mask(direction):
+    """A thick chevron at the edge the key moves you to."""
+    m = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(m).line([(150, 150), (256, 50), (362, 150)], fill=255, width=58, joint="curve")
+    return m.rotate(TURN[direction], center=(S / 2, S / 2), resample=Image.BICUBIC)
+
+
+def move(direction):
+    """A movement key: a silver arrow on slate, lit from the top whichever way it points."""
+    img = radial((70, 80, 96), (14, 16, 22))
+    m = arrow_mask(direction, 0.95)
+    shadow(img, m)
+    paint(img, outline(m, 8), Image.new("RGBA", (S, S), (8, 10, 14, 255)))
+    paint(img, m, vgrad((S, S), (245, 248, 252), (150, 160, 175)))
+    vignette(img)
+    return img
+
+
+def combo(symbol_fn, inner, outer, direction):
+    """A job on a movement key (autorun on E, follow on F): the job's own symbol, smaller and pushed away from the edge
+    the key moves you to, and a white chevron on that edge."""
+    img = radial(inner, outer)
+    CLEAR[0] = True
+    sym = symbol_fn()
+    CLEAR[0] = False
+    sym = sym.resize((int(S * 0.74), int(S * 0.74)), Image.LANCZOS)
+    off = {"up": (0, 50), "down": (0, -50), "left": (50, 0), "right": (-50, 0)}[direction]
+    x = (S - sym.width) // 2 + off[0]
+    y = (S - sym.height) // 2 + off[1]
+    img.alpha_composite(sym, (x, y))
+    c = chevron_mask(direction)
+    shadow(img, c, offset=(6, 8), blur=8)
+    paint(img, outline(c, 7), Image.new("RGBA", (S, S), (8, 10, 14, 255)))
+    paint(img, c, vgrad((S, S), (255, 255, 255), (200, 210, 225)))
+    vignette(img)
+    return img
+
+
+ICONS = [("interact", interact), ("assist", assist), ("clip", clip), ("downtime", downtime), ("hideui", hideui),
+         ("follow", follow), ("sit", sit), ("autorun", autorun)]
+for dname in TURN:
+    ICONS.append(("move-" + dname, lambda dname=dname: move(dname)))
+    ICONS.append(("autorun-" + dname, lambda dname=dname: combo(autorun, (70, 140, 200), (10, 30, 60), dname)))
+    ICONS.append(("follow-" + dname, lambda dname=dname: combo(follow, (60, 120, 70), (10, 30, 14), dname)))
+for name, fn in ICONS:
     big = fn()
     big.save(f"{OUT}/{name}-512.png")
     small = big.resize((64, 64), Image.LANCZOS).convert("RGBA")
