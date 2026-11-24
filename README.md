@@ -67,6 +67,10 @@ game's own step curve, the way QuietHUD's Low health works.
 **Keys on Warlock HUD:** with Warlock HUD loaded, its icons show the key that casts each spell (WackyBars' own keys too),
 updated when keys or slots change. Warlock HUD itself is not changed.
 
+**Job pictures:** a key bound in Key Bindings to a job that isn't a bar button shows that job's picture on its button,
+with its key, and the job's name when you hover it: Interact With Target (a gold gear) and AutoClip's Save a clip (a
+clapperboard). Only a picture: the key keeps its binding, and a spell dragged onto the button shows instead.
+
 **Pet keys:** a key bound to a pet bar key in Key Bindings (Alt + F1 to F10 on the Alt mouse bar, say) shows the game's own
 pet button for it: the right abilities for whatever pet is out, autocast and cooldowns as on the game's bar, shown only
 with a pet (the spot keeps an empty slot otherwise, also when the pet has nothing in that slot). The other buttons of that bar stay action buttons. While any pet button sits on a WackyBars bar the game's pet

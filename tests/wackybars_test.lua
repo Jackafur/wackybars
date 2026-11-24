@@ -108,7 +108,7 @@ end
 
 WackyBarsCharDB = { v = 2 } -- (every bar on, the Shift, Ctrl and Alt copies too; the first load is checked in first_load_test)
 dofile(HERE .. "/tests/fake_lab.lua")(M)
-local ok, err = dofile(HERE .. "/tests/load_wackybars.lua")(M, HERE) -- (WackyBars.lua and the feature files after it)
+local ok, err, wbNs = dofile(HERE .. "/tests/load_wackybars.lua")(M, HERE) -- (WackyBars.lua and the feature files after it)
 check("loads", ok)
 if not ok then out(err) os.exit(1) end
 M.fire("ADDON_LOADED", "WackyBars")
@@ -2116,6 +2116,37 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 	check("... put back as before: a rule exactly on each copy that is on", (rule(S) ~= nil) == not DB.off.Shift
 		and (rule(MS) ~= nil) == not DB.off.MouseShift and (rule(C) ~= nil) == not DB.off.Ctrl
 		and (rule(MC) ~= nil) == not DB.off.MouseCtrl)
+end
+
+-- Job pictures (Jobs.lua, his "like H is my interact", Nov 24): a key bound to Interact shows the interact picture and its key,
+-- the job's name on hover; a spell dragged onto that button shows instead; the key itself is never bound by WackyBars.
+do
+	local H = _G.WackyBarsPlainH
+	local jobs = wbNs.wb.jobs
+	local function pic(b) return jobs.pic(b) end
+	check("job pictures: nothing listened to while no key has a job", H and not pic(H))
+	local hWas = binds.H
+	binds.H = "INTERACTTARGET"
+	M.fire("UPDATE_BINDINGS")
+	local p = pic(H)
+	check("H bound to Interact: the interact picture on H, with its key", H.__shown and p and p.__shown
+		and p.wbIcon == "Interface\\AddOns\\WackyBars\\icons\\interact" and H.HotKey.__text == "H" and H:GetHotkey() == "H")
+	check("... and no override on H (Interact stays your binding)", overrides.H == nil)
+	local tip
+	rawset(_G, "GameTooltip_SetDefaultAnchor", function() end)
+	rawset(GameTooltip, "SetText", function(_, t) tip = t end)
+	H.__scripts.OnEnter(H)
+	check("... hover: the job's name", tip == "Interact With Target")
+	local slot = H.wb.slot
+	actions[slot] = true
+	M.fire("ACTIONBAR_SLOT_CHANGED", slot)
+	check("a spell dragged onto H: the picture goes, the spell shows", slot and not p.__shown)
+	actions[slot] = nil
+	M.fire("ACTIONBAR_SLOT_CHANGED", slot)
+	check("... taken off again: the picture is back", p.__shown)
+	binds.H = hWas
+	M.fire("UPDATE_BINDINGS")
+	check("H back to what it was: no picture", not p.__shown)
 end
 
 objMt.__index = baseIndex -- (the fake game as it was)
