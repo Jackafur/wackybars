@@ -357,8 +357,11 @@ ICONS = [("interact", interact), ("assist", assist), ("clip", clip), ("downtime"
          ("follow", follow), ("sit", sit), ("autorun", autorun)]
 def chevron(direction):
     """A movement key with no job, next to ones that have one (the Alt bar's S and D): just the chevron on the side it moves
-    you, on slate (his "when i said same style i meant the chevrons")."""
-    img = radial((70, 80, 96), (14, 16, 22))
+    you, coloured by direction so the set reads like E's blue and F's green (his "just do red and another color cause the e
+    is blue and f is green"): up blue, right green, left red, down purple."""
+    colours = {"up": ((70, 140, 200), (10, 30, 60)), "right": ((60, 120, 70), (10, 30, 14)),
+               "left": ((170, 50, 50), (40, 8, 10)), "down": ((120, 70, 170), (24, 10, 40))}
+    img = radial(*colours[direction])
     c = chevron_mask(direction)
     shadow(img, c, offset=(6, 8), blur=8)
     paint(img, outline(c, 7), Image.new("RGBA", (S, S), (8, 10, 14, 255)))
