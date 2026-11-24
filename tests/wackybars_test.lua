@@ -2104,6 +2104,17 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 	DB.altHeld = true
 	SlashCmdList.WACKYBARS("status")
 	check("... its box ticked (his ~ key, Nov 24): shown only while Alt is held", rule(A) == "[mod:alt] show; hide")
+	local told = {}
+	rawset(_G, "QuietHUD_HeldBar", function(holders, on) told[#told + 1] = { holders = holders, on = on } end)
+	A.__scripts.OnShow(A)
+	local MA = _G.WackyBarsMouseAlt
+	local liftedPet = false
+	for _, t in ipairs(told) do if t.on and t.holders[9] == _G.WackyBarsHoldMouseAlt9 then liftedPet = true end end
+	check("... Alt held: QuietHUD brings up the Alt bar and the pet bar (his \"alt should show the pet menu to\")", #told == 2
+		and liftedPet)
+	A.__scripts.OnHide(A)
+	check("... let go: both told they went", #told == 4 and told[3].on == false and told[4].on == false)
+	rawset(_G, "QuietHUD_HeldBar", nil)
 	DB.altHeld = nil
 	SlashCmdList.WACKYBARS("status")
 	check("... unticked again: always shown", rule(A) == nil and A.__shown)

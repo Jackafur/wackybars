@@ -153,12 +153,22 @@ end
 local function tell(bar, on)
 	if QuietHUD_HeldBar then pcall(QuietHUD_HeldBar, bar.holders, on) end
 end
+-- (holding Alt with the Alt bar held also brings up the Alt mouse bar, your pet bar, which itself always shows and fades
+-- with QuietHUD as before: his "alt should show the pet menu to", Nov 24)
+local mouseAlt
+for _, bar in ipairs(wb.bars) do if bar.id == "MouseAlt" then mouseAlt = bar end end
 for _, bar in ipairs(wb.bars) do
 	if bar.id == "MouseHyper" or MOD_HELD[bar.id] then
 		bar.frame:HookScript("OnShow", function()
-			if bar.wbHeld and not (wb.editing() or wb.moving()) then tell(bar, true) end
+			if bar.wbHeld and not (wb.editing() or wb.moving()) then
+				tell(bar, true)
+				if bar.id == "Alt" and mouseAlt and wb.barOn(mouseAlt) then tell(mouseAlt, true) end
+			end
 		end)
-		bar.frame:HookScript("OnHide", function() tell(bar, false) end)
+		bar.frame:HookScript("OnHide", function()
+			tell(bar, false)
+			if bar.id == "Alt" and mouseAlt then tell(mouseAlt, false) end
+		end)
 	end
 end
 wb.applyHooks[#wb.applyHooks + 1] = fillMods
