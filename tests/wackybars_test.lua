@@ -2170,29 +2170,23 @@ do
 	binds.E, binds["ALT-E"] = "MOVEFORWARD", "TOGGLEAUTORUN"
 	M.fire("UPDATE_BINDINGS")
 	local tg = wbNs.wb.jobs.tag(AE)
-	check("Alt + E autorun (E moves you): the boot with an up chevron, no faint arrow (his \"autorun ... icons arent on my alt menu\")",
-		AE.__shown and pic(AE) and pic(AE).wbIcon:match("autorun%-up$") and not AE.wb.arrowTex.__shown and not (tg and tg.__shown))
+	check("Alt + E autorun (E moves you): E's arrow with AUTO under it (the pictures there were dropped: \"it gets in the way\")",
+		AE.wb.arrowTex.__shown and not AE.__shown and tg and tg.__shown and tg.__text == "AUTO")
 	local AF = _G.WackyBarsAltF
 	local fWas, afWas = binds.F, binds["ALT-F"]
-	local sWas, dWas = binds.S, binds.D
-	binds.F, binds["ALT-F"], binds.S, binds.D = "STRAFERIGHT", "FOLLOWTARGET", "STRAFELEFT", "MOVEBACKWARD"
+	binds.F, binds["ALT-F"] = "STRAFERIGHT", "FOLLOWTARGET"
 	M.fire("UPDATE_BINDINGS")
-	check("... Alt + F follow (F strafes right): footprints with a right chevron", AF.__shown and pic(AF)
-		and pic(AF).wbIcon:match("follow%-right$"))
-	local AS, AD = _G.WackyBarsAltS, _G.WackyBarsAltD
-	check("... and that bar's other movement keys are pictures too (his \"icons in the same style for S and D\")",
-		AS.__shown and pic(AS) and pic(AS).wbIcon:match("chevron%-left$") and not AS.wb.arrowTex.__shown
-		and AD.__shown and pic(AD).wbIcon:match("chevron%-down$"))
-	check("... the plain bar keeps its faint arrows", _G.WackyBarsPlainS.wb.arrowTex.__shown and not _G.WackyBarsPlainS.__shown)
-	binds.F, binds["ALT-F"], binds.S, binds.D = fWas, afWas, sWas, dWas
+	local tf = wbNs.wb.jobs.tag(AF)
+	check("... Alt + F follow (F strafes right): F's arrow with FOLLOW under it", AF.wb.arrowTex.__shown and not AF.__shown
+		and tf and tf.__shown and tf.__text == "FOLLOW")
+	binds.F, binds["ALT-F"] = fWas, afWas
 	M.fire("UPDATE_BINDINGS")
-	-- Movement keys as icons (the box): E an arrow picture, Alt + E autorun the boot with an up chevron, no faint arrows, no AUTO
+	-- Movement keys as icons (the box): E an arrow picture, no faint arrows
 	DB.moveIcons = true
 	SlashCmdList.WACKYBARS("status")
 	local PE = _G.WackyBarsPlainE
 	check("Movement keys as icons: E shows the up arrow picture, the faint arrow is gone", PE.__shown and pic(PE)
 		and pic(PE).__shown and pic(PE).wbIcon:match("move%-up$") and not PE.wb.arrowTex.__shown and PE.HotKey.__text == "E")
-	check("... Alt + E autorun: the boot with an up chevron", AE.__shown and pic(AE).wbIcon:match("autorun%-up$"))
 	check("... E's key itself is left alone (no override)", overrides.E == nil and overrides["ALT-E"] == nil)
 	DB.moveIcons = nil
 	SlashCmdList.WACKYBARS("status")

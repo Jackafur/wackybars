@@ -37,27 +37,19 @@ local pics, labelled, hooked, tags = {}, {}, {}, {}
 -- A job on a movement key's Alt / Shift / Ctrl copy keeps the key's arrow (his rule, Nov 10); a short word under the arrow
 -- says the job instead of a picture (his "just do the regular E with no icon but maybe just include a stylized AUTO in
 -- there", Nov 24, after the boot and a boot with a corner arrow both looked weird).
-local TAGS = { TOGGLEAUTORUN = "AUTO" }
+local TAGS = { TOGGLEAUTORUN = "AUTO", FOLLOWTARGET = "FOLLOW" }
 -- the job a button's key does, when it is not a bar button (nil otherwise)
 local function cmdOf(b)
 	local q = b.wb
 	return q and (q.kind == "other" or q.kind == "job") and q.other or nil
 end
 -- Movement keys as icons (a box, off unless ticked; his "remove the regular arrows, do icons again, but include the movement
--- key in the icon", Nov 24): a key that moves you shows an arrow picture by its direction (so WASD or ESDF both fit); a
--- modifier copy of one with a job (autorun on Alt + E, follow on Alt + F) shows the job with a chevron on that side.
+-- key in the icon", Nov 24; "not really what i had in mind", left off): a key that moves you shows an arrow picture by its
+-- direction (so WASD or ESDF both fit).
 local MOVE_NAMES = { up = "MOVEFORWARD", down = "MOVEBACKWARD", left = "STRAFELEFT", right = "STRAFERIGHT" }
-local COMBOS = { TOGGLEAUTORUN = "autorun", FOLLOWTARGET = "follow" }
--- (a bar where a movement key shows autorun or follow draws its other movement keys as pictures too, so the set matches:
--- his "can you do icons in the same style for S and D", Nov 24, on the Alt bar)
-local comboBars = {}
 local function movePic(b)
 	local q, DB = b.wb, wb.db()
-	if not (DB and (DB.moveIcons or comboBars[q.bar]) and q.kind == "move" and q.move) then return nil end
-	local cmd = q.mod ~= "" and q.def and GetBindingAction(q.def) or ""
-	if COMBOS[cmd] then return DIR .. COMBOS[cmd] .. "-" .. q.move, cmd end
-	-- (on a bar drawn for autorun or follow, a plain chevron like theirs: his "i meant the chevrons"; else the arrow picture)
-	if not DB.moveIcons then return DIR .. "chevron-" .. q.move, MOVE_NAMES[q.move] end
+	if not (DB and DB.moveIcons and q.kind == "move" and q.move) then return nil end
 	return DIR .. "move-" .. q.move, MOVE_NAMES[q.move]
 end
 local function slotFull(b)
@@ -117,9 +109,6 @@ local function refresh(b)
 	local on = cmd and not edited and not slotFull(b)
 	labelled[b] = on and true or nil
 	local job = on and (mpic and { icon = mpic } or JOBS[cmd])
-	-- autorun or follow on a movement key's copy (Alt + E, Alt + F): the picture with that key's direction in it
-	local dir = job and not mpic and COMBOS[cmd] and b.wb.mod ~= "" and wb.bareDir(b.wb)
-	if dir then job = { icon = DIR .. COMBOS[cmd] .. "-" .. dir } end
 	if not job then
 		if pics[b] then pics[b]:Hide() end
 	else
@@ -173,22 +162,6 @@ local function tagOf(b)
 	f:Show()
 end
 local function refreshAll()
-	wipe(comboBars)
-	for _, b in ipairs(wb.buttons) do
-		local q = b.wb
-		if q.kind == "job" and COMBOS[q.other] and q.mod ~= "" and b:IsShown() then comboBars[q.bar] = true end
-	end
-	-- (their movement keys: WackyBars left them as faint arrows with the button hidden; out of a fight, after apply)
-	local DB = wb.db()
-	for _, b in ipairs(wb.buttons) do
-		local q = b.wb
-		if comboBars[q.bar] and not (DB and DB.moveIcons) and q.kind == "move" and q.move and wb.barOn(q.bar)
-			and not (DB.hidden and DB.hidden[q.id]) then
-			if q.arrowTex then q.arrowTex:Hide() end
-			b:SetAlpha(1)
-			b:Show()
-		end
-	end
 	local any = false
 	for _, b in ipairs(wb.buttons) do
 		refresh(b)
@@ -217,5 +190,5 @@ wb.optionRows[#wb.optionRows + 1] = {
 	set = function(v) wb.db().moveIcons = v and true or nil end,
 }
 
-ns.wb.jobs = { combos = COMBOS, list = JOBS, showing = showing, pic = function(b) return pics[b] end,
+ns.wb.jobs = { list = JOBS, showing = showing, pic = function(b) return pics[b] end,
 	tag = function(b) return tags[b] end } -- (for the tests)
