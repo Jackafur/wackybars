@@ -64,10 +64,16 @@ check("the off bars take no spare slots", DB.spare.Shift3 == nil)
 check("the old one size becomes each bar's size", DB.scale == nil and DB.sizes.Plain == 1.1 and DB.sizes.MouseHyper == 1.1)
 check("Hypershift side 1 shows your Bar 8 slot (178)", _G.WackyBarsMouseHyperSide1.__attrs.action == 178)
 check("the game's action bars are tucked away", _G.MainActionBar:GetParent() ~= UIParent and _G.MultiBar7:GetParent() ~= UIParent)
+check("saved settings from before keep their Shift and Ctrl hold (not turned off)", DB.modsAlways == nil)
 -- you switch the Shift copy on; the next load keeps it
 DB.off.Shift = nil
 M.fire("ADDON_LOADED", "WackyBars")
 check("once only: a copy you switched on stays on", not DB.off.Shift)
+-- someone new (no saved settings at all): Shift and Ctrl bars always shown, Alt not held (his rules are boxes they can tick)
+WackyBarsCharDB = nil
+M.fire("ADDON_LOADED", "WackyBars")
+check("a new install: Shift and Ctrl bars always shown, Alt not held", WackyBarsCharDB.modsAlways == true
+	and not WackyBarsCharDB.altHeld)
 check("saved bindings never written", written == 0)
 check("no Lua errors", #M.errors == 0)
 for _, e in ipairs(M.errors) do out(e) end

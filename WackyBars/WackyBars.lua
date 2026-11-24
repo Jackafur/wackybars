@@ -2445,8 +2445,13 @@ events:RegisterEvent("PLAYER_REGEN_DISABLED")
 events:RegisterEvent("CVAR_UPDATE") -- (Lock Action Bars switched in the options reaches the buttons at once)
 local function onEvent(_, event, arg)
 	if event == "ADDON_LOADED" and arg == ADDON then
-		WackyBarsCharDB = type(WackyBarsCharDB) == "table" and WackyBarsCharDB or {}
+		local fresh = type(WackyBarsCharDB) ~= "table"
+		WackyBarsCharDB = fresh and {} or WackyBarsCharDB
 		DB = WackyBarsCharDB
+		-- (a new install or character: Shift and Ctrl bars always shown, the plain way; showing them only while held is his rule,
+		-- a box in the options, Hold.lua. Nov 24: "i dont want my weird alt, ctrl, shift rules messing with them". Saved
+		-- settings from before keep what they had.)
+		if fresh then DB.modsAlways = true end
 		DB.noPeek = nil -- (the Alt boxes, Nov 10, moved to QuietHUD's Show with Alt column the same day)
 		for _, k in ipairs({ "keys", "spare", "pos", "off", "hidden", "sizes" }) do
 			if type(DB[k]) ~= "table" then DB[k] = {} end

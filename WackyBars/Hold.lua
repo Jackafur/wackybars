@@ -122,8 +122,10 @@ wb.optionRows[#wb.optionRows + 1] = {
 
 -- Shift and Ctrl: the copy bars of each, on a state driver while the box is ticked (out of a fight, after each apply and
 -- each mode change; the driver itself works in a fight).
--- The Alt keyboard bar too since Nov 24 (his "how do we make it so alt bar isnt shown when I hold ~": ~ is QuietHUD's show
--- all, which brought the always-shown Alt bar up with everything); the Alt mouse bar, the pet bar, stays always shown.
+-- The Alt keyboard bar too, only with its own box ticked (off by default, so nobody else's Alt bar changes: his "i dont want
+-- my weird alt, ctrl, shift rules messing with them", Nov 24). His reason: "how do we make it so alt bar isnt shown when I
+-- hold ~" (~ is QuietHUD's show all, which brought the always-shown Alt bar up with everything). The Alt mouse bar (the pet
+-- bar) is never held.
 local MOD_HELD = { Shift = "[mod:shift] show; hide", MouseShift = "[mod:shift] show; hide", Ctrl = "[mod:ctrl] show; hide",
 	MouseCtrl = "[mod:ctrl] show; hide", Alt = "[mod:alt] show; hide" }
 local function fillMods()
@@ -134,7 +136,8 @@ local function fillMods()
 		local rule = MOD_HELD[bar.id]
 		if rule then
 			UnregisterStateDriver(bar.frame, "visibility")
-			bar.wbHeld = DB and wb.barOn(bar) and not DB.modsAlways and true or false
+			local wanted = DB and (bar.id == "Alt" and DB.altHeld or (bar.id ~= "Alt" and not DB.modsAlways))
+			bar.wbHeld = DB and wb.barOn(bar) and wanted and true or false
 			if bar.wbHeld and not showAll then
 				RegisterStateDriver(bar.frame, "visibility", rule)
 			else
@@ -161,7 +164,12 @@ end
 wb.applyHooks[#wb.applyHooks + 1] = fillMods
 wb.modeHooks[#wb.modeHooks + 1] = fillMods
 wb.optionRows[#wb.optionRows + 1] = {
-	label = "Shift, Ctrl and Alt bars only while you hold that key (the Alt mouse bar always shows)",
+	label = "Shift and Ctrl bars only while you hold Shift or Ctrl",
 	get = function() local DB = wb.db() return DB and not DB.modsAlways end,
 	set = function(v) wb.db().modsAlways = (not v) or nil end,
+}
+wb.optionRows[#wb.optionRows + 1] = {
+	label = "Alt keyboard bar only while you hold Alt",
+	get = function() local DB = wb.db() return DB and DB.altHeld and true or false end,
+	set = function(v) wb.db().altHeld = v and true or nil end,
 }

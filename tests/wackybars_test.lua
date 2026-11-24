@@ -2099,8 +2099,14 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 		S.__template == "SecureFrameTemplate" and MC.__template == "SecureFrameTemplate"
 		and rule(S) == "[mod:shift] show; hide" and rule(MS) == "[mod:shift] show; hide"
 		and rule(C) == "[mod:ctrl] show; hide" and rule(MC) == "[mod:ctrl] show; hide")
-	check("... the Alt keyboard copy too (his ~ key, Nov 24): protected, shown only while Alt is held",
-		A.__template == "SecureFrameTemplate" and rule(A) == "[mod:alt] show; hide")
+	check("... the Alt keyboard copy: protected, but always shown unless its own box is ticked (off by default)",
+		A.__template == "SecureFrameTemplate" and rule(A) == nil and A.__shown)
+	DB.altHeld = true
+	SlashCmdList.WACKYBARS("status")
+	check("... its box ticked (his ~ key, Nov 24): shown only while Alt is held", rule(A) == "[mod:alt] show; hide")
+	DB.altHeld = nil
+	SlashCmdList.WACKYBARS("status")
+	check("... unticked again: always shown", rule(A) == nil and A.__shown)
 	check("... the Alt mouse copy (the pet bar) is not held: always shown", rule(_G.WackyBarsMouseAlt) == nil
 		and _G.WackyBarsMouseAlt.__template == nil)
 	WackyBars_ToggleMove()
