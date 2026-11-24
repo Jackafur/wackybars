@@ -2174,11 +2174,17 @@ do
 		AE.__shown and pic(AE) and pic(AE).wbIcon:match("autorun%-up$") and not AE.wb.arrowTex.__shown and not (tg and tg.__shown))
 	local AF = _G.WackyBarsAltF
 	local fWas, afWas = binds.F, binds["ALT-F"]
-	binds.F, binds["ALT-F"] = "STRAFERIGHT", "FOLLOWTARGET"
+	local sWas, dWas = binds.S, binds.D
+	binds.F, binds["ALT-F"], binds.S, binds.D = "STRAFERIGHT", "FOLLOWTARGET", "STRAFELEFT", "MOVEBACKWARD"
 	M.fire("UPDATE_BINDINGS")
 	check("... Alt + F follow (F strafes right): footprints with a right chevron", AF.__shown and pic(AF)
 		and pic(AF).wbIcon:match("follow%-right$"))
-	binds.F, binds["ALT-F"] = fWas, afWas
+	local AS, AD = _G.WackyBarsAltS, _G.WackyBarsAltD
+	check("... and that bar's other movement keys are pictures too (his \"icons in the same style for S and D\")",
+		AS.__shown and pic(AS) and pic(AS).wbIcon:match("move%-left$") and not AS.wb.arrowTex.__shown
+		and AD.__shown and pic(AD).wbIcon:match("move%-down$"))
+	check("... the plain bar keeps its faint arrows", _G.WackyBarsPlainS.wb.arrowTex.__shown and not _G.WackyBarsPlainS.__shown)
+	binds.F, binds["ALT-F"], binds.S, binds.D = fWas, afWas, sWas, dWas
 	M.fire("UPDATE_BINDINGS")
 	-- Movement keys as icons (the box): E an arrow picture, Alt + E autorun the boot with an up chevron, no faint arrows, no AUTO
 	DB.moveIcons = true

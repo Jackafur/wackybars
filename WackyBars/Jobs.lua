@@ -48,9 +48,12 @@ end
 -- modifier copy of one with a job (autorun on Alt + E, follow on Alt + F) shows the job with a chevron on that side.
 local MOVE_NAMES = { up = "MOVEFORWARD", down = "MOVEBACKWARD", left = "STRAFELEFT", right = "STRAFERIGHT" }
 local COMBOS = { TOGGLEAUTORUN = "autorun", FOLLOWTARGET = "follow" }
+-- (a bar where a movement key shows autorun or follow draws its other movement keys as pictures too, so the set matches:
+-- his "can you do icons in the same style for S and D", Nov 24, on the Alt bar)
+local comboBars = {}
 local function movePic(b)
 	local q, DB = b.wb, wb.db()
-	if not (DB and DB.moveIcons and q.kind == "move" and q.move) then return nil end
+	if not (DB and (DB.moveIcons or comboBars[q.bar]) and q.kind == "move" and q.move) then return nil end
 	local cmd = q.mod ~= "" and q.def and GetBindingAction(q.def) or ""
 	if COMBOS[cmd] then return DIR .. COMBOS[cmd] .. "-" .. q.move, cmd end
 	return DIR .. "move-" .. q.move, MOVE_NAMES[q.move]
@@ -168,6 +171,22 @@ local function tagOf(b)
 	f:Show()
 end
 local function refreshAll()
+	wipe(comboBars)
+	for _, b in ipairs(wb.buttons) do
+		local q = b.wb
+		if q.kind == "job" and COMBOS[q.other] and q.mod ~= "" and b:IsShown() then comboBars[q.bar] = true end
+	end
+	-- (their movement keys: WackyBars left them as faint arrows with the button hidden; out of a fight, after apply)
+	local DB = wb.db()
+	for _, b in ipairs(wb.buttons) do
+		local q = b.wb
+		if comboBars[q.bar] and not (DB and DB.moveIcons) and q.kind == "move" and q.move and wb.barOn(q.bar)
+			and not (DB.hidden and DB.hidden[q.id]) then
+			if q.arrowTex then q.arrowTex:Hide() end
+			b:SetAlpha(1)
+			b:Show()
+		end
+	end
 	local any = false
 	for _, b in ipairs(wb.buttons) do
 		refresh(b)
