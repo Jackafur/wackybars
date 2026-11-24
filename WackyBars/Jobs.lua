@@ -4,7 +4,8 @@
 -- downtime on 2 but it shows nothing bound on my bars"): a key bound in Key Bindings to a job that is not a bar button shows
 -- its key on its button and the job's name when you hover it; a job WackyBars knows shows its picture too (H = Interact
 -- With Target, 2 = Downtime's menu, AutoClip's Save a clip). Only a picture: the key keeps doing what Key Bindings says
--- (WackyBars never touches it), and the button's own spare slot stays below it, so a spell you drag there shows instead.
+-- (WackyBars never touches it). A job with a picture holds no slot (WackyBars.lua port: kind "job"); a key without one keeps
+-- its spare slot below, so a spell you drag there shows instead.
 -- Pictures: icons\*.tga, 64 x 64 like the game's spell icons (drawn Nov 24, tools\make_icons.py).
 -- Cost: nothing runs on its own: a pass over the buttons after each apply, and, while a key has such a job, one when an
 -- action slot changes.
@@ -35,11 +36,11 @@ local pics, labelled, hooked = {}, {}, {}
 -- the job a button's key does, when it is not a bar button (nil otherwise)
 local function cmdOf(b)
 	local q = b.wb
-	return q and q.kind == "other" and q.other or nil
+	return q and (q.kind == "other" or q.kind == "job") and q.other or nil
 end
 local function slotFull(b)
-	local s = b.wb.slot
-	return s ~= nil and HasAction(s) and true or false
+	local s = b.wb.kind ~= "job" and b.wb.slot
+	return s and HasAction(s) and true or false
 end
 -- the key as the button would write it: the spot's label, with s / c / a in front on a modifier bar when labels show it
 local function keyLabel(b)

@@ -229,21 +229,24 @@ def follow():
 
 
 def sit():
-    """Sit / stand: a wooden chair, on warm brown."""
+    """Sit / stand: a wooden chair seen from the side (the front view read as a ladder: his "why is alt x a ladder lmao"),
+    on warm brown."""
     img = radial((150, 100, 60), (36, 20, 10))
     m = Image.new("L", (S, S), 0)
     d = ImageDraw.Draw(m)
-    d.rounded_rectangle([150, 70, 200, 300], 10, fill=255)      # back post left
-    d.rounded_rectangle([312, 70, 362, 300], 10, fill=255)      # back post right
-    d.rounded_rectangle([150, 90, 362, 135], 10, fill=255)      # top rail
-    d.rounded_rectangle([150, 170, 362, 205], 10, fill=255)     # middle rail
-    d.rounded_rectangle([120, 270, 392, 320], 12, fill=255)     # seat
-    d.rounded_rectangle([140, 300, 186, 450], 10, fill=255)     # front leg left
-    d.rounded_rectangle([326, 300, 372, 450], 10, fill=255)     # front leg right
-    d.rounded_rectangle([140, 380, 372, 404], 8, fill=255)      # stretcher
+    d.polygon([(150, 60), (196, 60), (214, 300), (168, 300)], fill=255)   # the back, leaning back a little
+    d.rounded_rectangle([150, 270, 390, 318], 12, fill=255)              # the seat
+    d.rounded_rectangle([158, 300, 200, 452], 10, fill=255)              # back leg
+    d.rounded_rectangle([340, 300, 382, 452], 10, fill=255)              # front leg
+    d.rounded_rectangle([170, 380, 370, 402], 8, fill=255)               # stretcher
     shadow(img, m)
     paint(img, outline(m, 7), Image.new("RGBA", (S, S), (30, 14, 4, 255)))
     paint(img, m, vgrad((S, S), (230, 170, 100), (140, 82, 36)))
+    # a red cushion on the seat
+    c = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(c).rounded_rectangle([196, 236, 384, 280], 20, fill=255)
+    paint(img, outline(c, 6), Image.new("RGBA", (S, S), (40, 6, 6, 255)))
+    paint(img, c, vgrad((S, S), (220, 70, 60), (140, 30, 30)))
     vignette(img)
     return img
 

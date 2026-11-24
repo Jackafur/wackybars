@@ -2146,13 +2146,8 @@ do
 	rawset(GameTooltip, "SetText", function(_, t) tip = t end)
 	H.__scripts.OnEnter(H)
 	check("... hover: the job's name", tip == "Interact With Target")
-	local slot = H.wb.slot
-	actions[slot] = true
-	M.fire("ACTIONBAR_SLOT_CHANGED", slot)
-	check("a spell dragged onto H: the picture goes, the spell shows", slot and not p.__shown)
-	actions[slot] = nil
-	M.fire("ACTIONBAR_SLOT_CHANGED", slot)
-	check("... taken off again: the picture is back", p.__shown)
+	check("... a job with a picture takes no spare slot (they run out with every bar on)", H.wb.kind == "job"
+		and H.wb.slot == nil and attr("WackyBarsPlainH", "labtype-0") ~= "action")
 	binds.H = hWas
 	M.fire("UPDATE_BINDINGS")
 	check("H back to what it was: no picture", not p.__shown)
@@ -2169,6 +2164,18 @@ do
 	check("... hover: Downtime menu", tip == "Downtime menu")
 	binds["2"] = twoWas
 	M.fire("UPDATE_BINDINGS")
+	-- Alt + E autorun while E moves you: the boot, not E's arrow (his "lets add the autorun in there to")
+	local AE = _G.WackyBarsAltE
+	local eWas, aeWas = binds.E, binds["ALT-E"]
+	binds.E, binds["ALT-E"] = "MOVEFORWARD", "TOGGLEAUTORUN"
+	M.fire("UPDATE_BINDINGS")
+	check("Alt + E autorun (E moves you): the boot, not the arrow", AE.__shown and not AE.wb.arrowTex.__shown
+		and pic(AE) and pic(AE).__shown and pic(AE).wbIcon:match("autorun$"))
+	binds.E, binds["ALT-E"] = eWas, aeWas
+	M.fire("UPDATE_BINDINGS")
+	check("the Alt bar has B, N and a 4-wide Space (Alt + B, Alt + N, Alt + Space)", _G.WackyBarsAltB.wb.def == "ALT-B"
+		and _G.WackyBarsAltN.wb.def == "ALT-N" and _G.WackyBarsAltSpace.wb.def == "ALT-SPACE"
+		and _G.WackyBarsAltSpace.wb.spot.wide == 4 and _G.WackyBarsShiftB == nil and _G.WackyBarsPlainSpace == nil)
 end
 
 objMt.__index = baseIndex -- (the fake game as it was)

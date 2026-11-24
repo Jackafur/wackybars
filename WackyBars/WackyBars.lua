@@ -74,6 +74,12 @@ do
 		only = PLAIN, fixedMod = true }
 	KEYBOARD[#KEYBOARD + 1] = { name = "Blank1", label = "", x = 5, sx = 6.25, row = 3, only = SHIFT_CTRL }
 	KEYBOARD[#KEYBOARD + 1] = { name = "Blank2", label = "", x = 6, sx = 7.25, row = 3, only = SHIFT_CTRL }
+	-- the Alt bar, his utility keys, gets the real Alt + B, Alt + N and Alt + Space (his asks, Nov 24: "the alt menu should get
+	-- a spacebar to maybe cause I use alt space for mounts", "you can add B and N on the alt wacky bar to"); Space under X to N
+	local ALT = { Alt = true }
+	KEYBOARD[#KEYBOARD + 1] = { key = "B", name = "B", label = "B", x = 5, sx = 6.25, row = 3, only = ALT }
+	KEYBOARD[#KEYBOARD + 1] = { key = "N", name = "N", label = "N", x = 6, sx = 7.25, row = 3, only = ALT }
+	KEYBOARD[#KEYBOARD + 1] = { key = "SPACE", name = "Space", label = "Space", x = 2, sx = 3.25, row = 4, wide = 4, only = ALT }
 	-- Caps: two buttons wide, ending where A starts (his ask, Nov 10). On his Linux PC Caps types \ (a custom KDE keyboard
 	-- option), so the game sees \, not CAPSLOCK: the button is that key (his ask, Nov 10).
 	KEYBOARD[#KEYBOARD + 1] = { key = "\\", name = "Caps", label = "Caps", x = -1, sx = -0.25, row = 2, wide = 2 }
@@ -347,7 +353,10 @@ local function moveDir(q)
 	-- (a key set to NONE in Key Bindings does nothing, so it does not fall back to the bare key)
 	-- (a modifier key bound to something that is not a bar button, like Ctrl + S's Toggle Sound, shows the bare key's arrow:
 	-- his ask, Nov 10)
-	if q.mod ~= "" and (c == "" or (c ~= "NONE" and parse(c) == "other" and not MOVES[c])) then
+	-- (except a job with its own picture, Jobs.lua: his autorun on Alt + E shows the boot, Nov 24 "lets add the autorun in
+	-- there to")
+	local pictured = ns.wb and ns.wb.jobs and ns.wb.jobs.list[c]
+	if q.mod ~= "" and (c == "" or (c ~= "NONE" and parse(c) == "other" and not MOVES[c] and not pictured)) then
 		c = GetBindingAction(q.spot.key) or ""
 	end
 	return MOVES[c]
@@ -369,6 +378,10 @@ local function port()
 			q.slot, q.cmd = (BARS[gi].page - 1) * 12 + n, cmd
 			byCmd[cmd] = byCmd[cmd] or {}
 			table.insert(byCmd[cmd], b)
+		elseif kind == "other" and ns.wb and ns.wb.jobs and ns.wb.jobs.list[cmd] then
+			-- (a job with its own picture, Jobs.lua: shown without a slot, so it takes no spare: with every bar on they ran
+			-- out and Alt + E's autorun had no button, Nov 24)
+			q.kind, q.other, q.slot = "job", cmd, nil
 		else
 			q.slot = DB.spare[q.id]
 			if kind == "other" then q.other = cmd end
@@ -383,7 +396,7 @@ local function port()
 	for _, b in ipairs(buttons) do
 		local q = b.wb
 		-- (a key that moves you never gets its old spare back: it would click the button instead of moving; audit Nov 10)
-		if q.kind ~= "mirror" and q.kind ~= "move" and q.kind ~= "pet" then q.slot = DB.spare[q.id] end
+		if q.kind ~= "mirror" and q.kind ~= "move" and q.kind ~= "pet" and q.kind ~= "job" then q.slot = DB.spare[q.id] end
 	end
 	local taken = {}
 	for _, s in pairs(DB.spare) do taken[s] = true end
@@ -392,7 +405,8 @@ local function port()
 	for li = 1, #LAYERS do
 		for _, b in ipairs(buttons) do
 			local q = b.wb
-			if q.bar.layerIndex == li and q.kind ~= "mirror" and q.kind ~= "move" and q.kind ~= "pet" and not q.slot and barOn(q.bar)
+			if q.bar.layerIndex == li and q.kind ~= "mirror" and q.kind ~= "move" and q.kind ~= "pet" and q.kind ~= "job"
+				and not q.slot and barOn(q.bar)
 				and not hiddenButton(b) and not spotGone(q.spot, q.bar) then
 				while pool[p] and (taken[pool[p]] or HasAction(pool[p])) do p = p + 1 end
 				if pool[p] then
@@ -1459,7 +1473,8 @@ local function apply()
 			b:SetAlpha(0.35)
 			if tostring(b:GetAttribute("state")) ~= "0" then b:SetAttribute("state", "0") end
 			b:SetState("0", "empty")
-		elseif not q.slot or (hiddenButton(b) and not editing) or spotGone(q.spot, q.bar) or not barOn(q.bar) then
+		elseif (not q.slot and q.kind ~= "job") or (hiddenButton(b) and not editing) or spotGone(q.spot, q.bar)
+			or not barOn(q.bar) then
 			b:Hide()
 			-- (state 0 and empty, through the library, so a paged button switched off drops its old slot too; Codex audit)
 			if tostring(b:GetAttribute("state")) ~= "0" or b:GetAction("0") ~= "empty" then
@@ -1481,7 +1496,7 @@ local function apply()
 				paged[#paged + 1] = b
 			else
 				if tostring(b:GetAttribute("state")) ~= "0" then b:SetAttribute("state", "0") end
-				b:SetState("0", "action", q.slot)
+				if q.kind == "job" then b:SetState("0", "empty") else b:SetState("0", "action", q.slot) end
 			end
 		end
 	end
@@ -1550,7 +1565,7 @@ local function summary()
 			elseif q.kind == "mirror" then mirror = mirror + 1
 			elseif q.slot then spare = spare + 1
 			elseif not hiddenButton(b) and not spotGone(q.spot, q.bar) then none = none + 1 end
-			if q.kind == "other" then other[#other + 1] = q.def .. " (" .. q.other .. ")" end
+			if q.kind == "other" or q.kind == "job" then other[#other + 1] = q.def .. " (" .. q.other .. ")" end
 		end
 	end
 	say(("%d keys show the slot they fire today, %d free keys have a spare slot to fill%s."):format(mirror, spare,
