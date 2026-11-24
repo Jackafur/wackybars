@@ -137,7 +137,7 @@ check("Caps is the \\ key: LockMenu on \\ keeps its key, the button gets a spare
 check("CAPSLOCK itself is not read (Linux never sends it)", attr("WackyBarsPlainCaps", "action") ~= 45)
 check("Shift + Caps is SHIFT-\\ (free: a spare slot when there are enough)", _G.WackyBarsShiftCaps.wb.def == "SHIFT-\\"
 	and _G.WackyBarsShiftCaps.wb.kind == "free")
-check("Caps shows no key", _G.WackyBarsPlainCaps.HotKey.__text == "*")
+check("Caps (LockMenu's key, not a bar button) shows its key, Caps", _G.WackyBarsPlainCaps.HotKey.__text == "Caps")
 check("untouched game keys get no override", overrides.Q == nil and overrides["SHIFT-Q"] == nil and overrides["1"] == nil)
 check("Shift + Q is labelled Q on the Shift bar", _G.WackyBarsShiftQ.HotKey.__text == "Q")
 local spares, dup = {}, false
@@ -370,7 +370,7 @@ edit.__scripts.OnUpdate(edit)
 edit.__scripts.OnKeyDown(edit, "PAGEUP")
 check("Page Up on the Caps button reads Caps", DB.keys.PlainCaps == "PAGEUP" and _G.WackyBarsPlainCaps.HotKey.__text == "Caps")
 edit.__scripts.OnKeyDown(edit, "ESCAPE")
-check("... cleared again, as it was", not DB.keys.PlainCaps and _G.WackyBarsPlainCaps.HotKey.__text == "*")
+check("... cleared again, as it was (Caps: LockMenu's key)", not DB.keys.PlainCaps and _G.WackyBarsPlainCaps.HotKey.__text == "Caps")
 rawset(_G.WackyBarsPlainCaps, "IsMouseOver", function() return false end)
 rawset(_G.WackyBarsPlainG, "IsMouseOver", function() return true end)
 edit.__scripts.OnUpdate(edit)
@@ -1745,7 +1745,7 @@ end
 -- whose picture is on one of your keys shows that key; Warlock HUD itself is left as it is.
 do
 	local function listening(e)
-		for _, o in ipairs(M.frames) do if o.__events[e] and o.__scripts.OnEvent then return true end end
+		for _, o in ipairs(M.frames) do if o.__events[e] and o.__scripts.OnEvent and not o.wbJobs then return true end end
 		return false
 	end
 	check("Warlock HUD keys: nothing listened to until Warlock HUD is there at login", not listening("ACTIONBAR_SLOT_CHANGED"))
@@ -2147,6 +2147,19 @@ do
 	binds.H = hWas
 	M.fire("UPDATE_BINDINGS")
 	check("H back to what it was: no picture", not p.__shown)
+	-- Downtime on 2 (his "i have downtime on 2 but it shows nothing bound on my bars")
+	local two = _G.WackyBarsPlain2
+	local twoWas = binds["2"]
+	binds["2"] = "CLICK DowntimeKey:LeftButton"
+	M.fire("UPDATE_BINDINGS")
+	local tp = pic(two)
+	check("2 bound to Downtime's menu: the campfire on 2, with its key", tp and tp.__shown
+		and tp.wbIcon:match("downtime$") and two.HotKey.__text == "2")
+	tip = nil
+	two.__scripts.OnEnter(two)
+	check("... hover: Downtime menu", tip == "Downtime menu")
+	binds["2"] = twoWas
+	M.fire("UPDATE_BINDINGS")
 end
 
 objMt.__index = baseIndex -- (the fake game as it was)

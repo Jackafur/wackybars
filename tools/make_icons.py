@@ -134,7 +134,41 @@ def clip():
     return img
 
 
-for name, fn in (("interact", interact), ("clip", clip)):
+def downtime():
+    """Downtime's menu (camp, hearths, professions between fights): a campfire at dusk, in Downtime's purple."""
+    img = radial((96, 60, 150), (16, 8, 34), centre=(0.5, 0.62))
+    # the glow on the ground
+    glow = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(glow).ellipse([96, 300, 416, 470], fill=150)
+    paint(img, glow.filter(ImageFilter.GaussianBlur(40)), Image.new("RGBA", (S, S), (255, 150, 60, 255)))
+    # two crossed logs
+    logs = Image.new("L", (S, S), 0)
+    for ang in (18, -18):
+        log = Image.new("L", (S, S), 0)
+        ImageDraw.Draw(log).rounded_rectangle([110, 380, 402, 430], 24, fill=255)
+        logs = Image.composite(Image.new("L", (S, S), 255), logs, log.rotate(ang, center=(256, 405), resample=Image.BICUBIC))
+    shadow(img, logs)
+    paint(img, outline(logs, 6), Image.new("RGBA", (S, S), (24, 10, 4, 255)))
+    paint(img, logs, vgrad((S, S), (150, 92, 50), (80, 44, 20)))
+    # the flame: three tongues, outer orange, inner yellow, a white-hot core
+    def flame(cx, base, w, h):
+        m = Image.new("L", (S, S), 0)
+        d = ImageDraw.Draw(m)
+        d.ellipse([cx - w, base - w * 1.2, cx + w, base + w * 0.5], fill=255)
+        d.polygon([(cx - w * 0.98, base - w * 0.5), (cx + w * 0.98, base - w * 0.5), (cx + w * 0.15, base - h), (cx - w * 0.1, base - h * 0.96)], fill=255)
+        return m.filter(ImageFilter.GaussianBlur(3))
+    outer = flame(256, 380, 112, 330)
+    for side, (dx, sh) in enumerate(((-70, 220), (72, 240))):
+        outer = Image.composite(Image.new("L", (S, S), 255), outer, flame(256 + dx, 385, 60, sh))
+    paint(img, outer.filter(ImageFilter.GaussianBlur(10)), Image.new("RGBA", (S, S), (255, 120, 30, 255)))
+    paint(img, outer, vgrad((S, S), (255, 170, 40), (230, 70, 20)))
+    paint(img, flame(256, 385, 70, 230), vgrad((S, S), (255, 235, 120), (255, 160, 40)))
+    paint(img, flame(256, 390, 34, 130), Image.new("RGBA", (S, S), (255, 252, 230, 255)))
+    vignette(img)
+    return img
+
+
+for name, fn in (("interact", interact), ("clip", clip), ("downtime", downtime)):
     big = fn()
     big.save(f"{OUT}/{name}-512.png")
     small = big.resize((64, 64), Image.LANCZOS).convert("RGBA")
