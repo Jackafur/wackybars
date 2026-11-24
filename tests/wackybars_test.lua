@@ -2164,17 +2164,12 @@ do
 	check("... hover: Downtime menu", tip == "Downtime menu")
 	binds["2"] = twoWas
 	M.fire("UPDATE_BINDINGS")
-	-- Alt + E autorun while E moves you: the boot, not E's arrow (his "lets add the autorun in there to")
+	-- Alt + E autorun while E moves you: E's arrow stays (his "nah it still looks weird" to the boot there)
 	local AE = _G.WackyBarsAltE
 	local eWas, aeWas = binds.E, binds["ALT-E"]
 	binds.E, binds["ALT-E"] = "MOVEFORWARD", "TOGGLEAUTORUN"
 	M.fire("UPDATE_BINDINGS")
-	check("Alt + E autorun (E moves you): the boot, not the arrow", AE.__shown and not AE.wb.arrowTex.__shown
-		and pic(AE) and pic(AE).__shown and pic(AE).wbIcon:match("autorun$"))
-	local ar = wbNs.wb.jobs.arrow(AE)
-	check("... with E's up arrow, small, in its top left corner (his \"the arrow icon got over wrote\")", ar and ar.__shown
-		and ar.__points[1] and ar.__points[1][1] == "TOPLEFT")
-	check("... H (no modifier) gets no corner arrow", not wbNs.wb.jobs.arrow(H) or not wbNs.wb.jobs.arrow(H).__shown)
+	check("Alt + E autorun (E moves you): E's arrow, no button", AE.wb.arrowTex.__shown and not AE.__shown)
 	binds.E, binds["ALT-E"] = eWas, aeWas
 	M.fire("UPDATE_BINDINGS")
 	check("the Alt bar has B, N and a 4-wide Space (Alt + B, Alt + N, Alt + Space)", _G.WackyBarsAltB.wb.def == "ALT-B"
