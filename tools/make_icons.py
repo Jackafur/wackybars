@@ -276,7 +276,25 @@ def autorun():
     return img
 
 
-for name, fn in (("interact", interact), ("clip", clip), ("downtime", downtime), ("hideui", hideui), ("follow", follow),
+def assist():
+    """Assist: take your friend's target. Red crosshairs over a target ring, on dark teal."""
+    img = radial((40, 110, 110), (6, 24, 26))
+    cx, cy = S / 2, S / 2
+    ring = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(ring)
+    d.ellipse([cx - 170, cy - 170, cx + 170, cy + 170], outline=255, width=34)
+    d.ellipse([cx - 40, cy - 40, cx + 40, cy + 40], fill=255)
+    for x0, y0, x1, y1 in ((cx - 17, 40, cx + 17, 170), (cx - 17, S - 170, cx + 17, S - 40),
+                           (40, cy - 17, 170, cy + 17), (S - 170, cy - 17, S - 40, cy + 17)):
+        d.rounded_rectangle([x0, y0, x1, y1], 8, fill=255)
+    shadow(img, ring)
+    paint(img, outline(ring, 7), Image.new("RGBA", (S, S), (24, 4, 4, 255)))
+    paint(img, ring, vgrad((S, S), (255, 110, 90), (190, 30, 30)))
+    vignette(img)
+    return img
+
+
+for name, fn in (("interact", interact), ("assist", assist), ("clip", clip), ("downtime", downtime), ("hideui", hideui), ("follow", follow),
                  ("sit", sit), ("autorun", autorun)):
     big = fn()
     big.save(f"{OUT}/{name}-512.png")

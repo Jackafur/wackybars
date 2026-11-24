@@ -70,7 +70,8 @@ updated when keys or slots change. Warlock HUD itself is not changed.
 **Jobs on keys:** a key bound in Key Bindings to a job that isn't a bar button shows its key on its button and the
 job's name when you hover it. Known jobs show a picture too: Interact With Target (a gold gear), Downtime's menu (a
 campfire), AutoClip's Save a clip (a clapperboard), Toggle User Interface (an eye), Follow Target (footprints),
-Sit/Stand (a chair), Toggle Autorun (a winged boot) and the raid markers (the game's own). Only a picture: the key keeps its binding, and a spell dragged onto the button shows instead.
+Sit/Stand (a chair), Toggle Autorun (a winged boot; on a movement key's copy the arrow stays, with AUTO under it),
+Assist Target (crosshairs) and the raid markers (the game's own). Only a picture: the key keeps its binding, and a spell dragged onto the button shows instead.
 
 **Pet keys:** a key bound to a pet bar key in Key Bindings (Alt + F1 to F10 on the Alt mouse bar, say) shows the game's own
 pet button for it: the right abilities for whatever pet is out, autocast and cooldowns as on the game's bar, shown only
