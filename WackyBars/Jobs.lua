@@ -19,7 +19,17 @@ local JOBS = {
 	INTERACTMOUSEOVER = { icon = DIR .. "interact", name = "Interact With Mouseover" },
 	AUTOCLIP_SAVE = { icon = DIR .. "clip", name = "AutoClip: save a clip (the last 2 minutes)" },
 	["CLICK DowntimeKey:LeftButton"] = { icon = DIR .. "downtime", name = "Downtime menu" },
+	-- his Alt utility keys (Nov 24, "just make the icons"): Alt + Z, F, X, E. (A Shift / Ctrl / Alt copy of a movement key
+	-- keeps that key's arrow, his rule of Nov 10, so autorun on Alt + E shows E's arrow; the boot shows on any other key.)
+	TOGGLEUI = { icon = DIR .. "hideui", name = "Toggle User Interface" },
+	FOLLOWTARGET = { icon = DIR .. "follow", name = "Follow Target" },
+	SITORSTAND = { icon = DIR .. "sit", name = "Sit/Stand" },
+	TOGGLEAUTORUN = { icon = DIR .. "autorun", name = "Toggle Autorun" },
 }
+-- the raid markers, with the game's own pictures (1 star, 2 circle, 3 diamond, 4 triangle, 5 moon, 6 square, 7 cross, 8 skull)
+for i = 1, 8 do
+	JOBS["RAIDTARGET" .. i] = { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_" .. i, name = "Raid marker " .. i }
+end
 
 local pics, labelled, hooked = {}, {}, {}
 -- the job a button's key does, when it is not a bar button (nil otherwise)

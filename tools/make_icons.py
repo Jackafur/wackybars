@@ -168,7 +168,113 @@ def downtime():
     return img
 
 
-for name, fn in (("interact", interact), ("clip", clip), ("downtime", downtime)):
+def hideui():
+    """Toggle the UI: an eye with a slash, on night blue."""
+    img = radial((52, 70, 120), (8, 12, 28))
+    eye = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(eye)
+    d.ellipse([70, 150, 442, 362], fill=255)
+    # almond shape: cut by two big circles
+    cut = Image.new("L", (S, S), 0)
+    dc = ImageDraw.Draw(cut)
+    dc.ellipse([-60, 40, 572, 560], fill=255)
+    dc2 = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(dc2).ellipse([-60, -48, 572, 472], fill=255)
+    from PIL import ImageChops
+    eye = ImageChops.multiply(ImageChops.multiply(eye, cut), dc2)
+    shadow(img, eye)
+    paint(img, outline(eye, 7), Image.new("RGBA", (S, S), (10, 10, 20, 255)))
+    paint(img, eye, vgrad((S, S), (250, 250, 245), (200, 205, 215)))
+    iris = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(iris).ellipse([196, 196, 316, 316], fill=255)
+    paint(img, iris, vgrad((S, S), (110, 200, 255), (30, 90, 170)))
+    pupil = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(pupil).ellipse([230, 230, 282, 282], fill=255)
+    paint(img, pupil, Image.new("RGBA", (S, S), (8, 10, 20, 255)))
+    hl = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(hl).ellipse([236, 214, 262, 240], fill=230)
+    paint(img, hl, Image.new("RGBA", (S, S), (255, 255, 255, 255)))
+    # the slash
+    sl = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(sl).line([(110, 420), (402, 92)], fill=255, width=40)
+    paint(img, outline(sl, 7), Image.new("RGBA", (S, S), (20, 4, 4, 255)))
+    paint(img, sl, vgrad((S, S), (255, 90, 80), (190, 30, 30)))
+    vignette(img)
+    return img
+
+
+def foot(img, cx, cy, ang, scale, colour):
+    m = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(m)
+    k = scale
+    d.ellipse([cx - 34 * k, cy - 40 * k, cx + 34 * k, cy + 50 * k], fill=255)       # sole
+    d.ellipse([cx - 28 * k, cy + 52 * k, cx + 28 * k, cy + 96 * k], fill=255)       # heel
+    for i, (dx, dy, r) in enumerate(((-30, -62, 12), (-12, -74, 13), (8, -76, 13), (26, -68, 12), (40, -52, 10))):
+        d.ellipse([cx + (dx - r) * k, cy + (dy - r) * k, cx + (dx + r) * k, cy + (dy + r) * k], fill=255)
+    m = m.rotate(ang, center=(cx, cy), resample=Image.BICUBIC)
+    shadow(img, m, offset=(6, 8), blur=8)
+    paint(img, outline(m, 5), Image.new("RGBA", (S, S), (20, 12, 4, 255)))
+    paint(img, m, colour)
+
+
+def follow():
+    """Follow your target: two pairs of footprints walking up, on green."""
+    img = radial((60, 120, 70), (10, 30, 14))
+    col = vgrad((S, S), (250, 225, 160), (190, 140, 70))
+    foot(img, 200, 380, 8, 0.9, col)
+    foot(img, 312, 270, -8, 0.9, col)
+    foot(img, 200, 160, 8, 0.9, col)
+    vignette(img)
+    return img
+
+
+def sit():
+    """Sit / stand: a wooden chair, on warm brown."""
+    img = radial((150, 100, 60), (36, 20, 10))
+    m = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(m)
+    d.rounded_rectangle([150, 70, 200, 300], 10, fill=255)      # back post left
+    d.rounded_rectangle([312, 70, 362, 300], 10, fill=255)      # back post right
+    d.rounded_rectangle([150, 90, 362, 135], 10, fill=255)      # top rail
+    d.rounded_rectangle([150, 170, 362, 205], 10, fill=255)     # middle rail
+    d.rounded_rectangle([120, 270, 392, 320], 12, fill=255)     # seat
+    d.rounded_rectangle([140, 300, 186, 450], 10, fill=255)     # front leg left
+    d.rounded_rectangle([326, 300, 372, 450], 10, fill=255)     # front leg right
+    d.rounded_rectangle([140, 380, 372, 404], 8, fill=255)      # stretcher
+    shadow(img, m)
+    paint(img, outline(m, 7), Image.new("RGBA", (S, S), (30, 14, 4, 255)))
+    paint(img, m, vgrad((S, S), (230, 170, 100), (140, 82, 36)))
+    vignette(img)
+    return img
+
+
+def autorun():
+    """Auto run: a winged boot, on sky blue."""
+    img = radial((70, 140, 200), (10, 30, 60))
+    wing = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(wing)
+    for i in range(4):
+        d.ellipse([230 + i * 18, 90 + i * 44, 460 - i * 10, 150 + i * 44], fill=255)
+    wing = wing.rotate(-12, center=(300, 200), resample=Image.BICUBIC)
+    boot = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(boot)
+    d.rounded_rectangle([150, 120, 280, 360], 26, fill=255)      # shaft
+    d.rounded_rectangle([110, 320, 400, 420], 40, fill=255)      # foot
+    d.rectangle([100, 400, 410, 432], fill=255)                  # sole
+    shadow(img, Image.composite(Image.new("L", (S, S), 255), wing, boot))
+    paint(img, outline(wing, 6), Image.new("RGBA", (S, S), (20, 30, 50, 255)))
+    paint(img, wing, vgrad((S, S), (255, 255, 255), (190, 210, 230)))
+    paint(img, outline(boot, 7), Image.new("RGBA", (S, S), (24, 12, 4, 255)))
+    paint(img, boot, vgrad((S, S), (190, 120, 60), (110, 60, 24)))
+    band = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(band).rectangle([150, 150, 280, 178], fill=255)
+    paint(img, Image.composite(band, Image.new("L", (S, S), 0), boot), Image.new("RGBA", (S, S), (240, 200, 90, 255)))
+    vignette(img)
+    return img
+
+
+for name, fn in (("interact", interact), ("clip", clip), ("downtime", downtime), ("hideui", hideui), ("follow", follow),
+                 ("sit", sit), ("autorun", autorun)):
     big = fn()
     big.save(f"{OUT}/{name}-512.png")
     small = big.resize((64, 64), Image.LANCZOS).convert("RGBA")
