@@ -32,7 +32,7 @@ for i = 1, 8 do
 	JOBS["RAIDTARGET" .. i] = { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_" .. i, name = "Raid marker " .. i }
 end
 
-local pics, labelled, hooked = {}, {}, {}
+local pics, labelled, hooked, arrows = {}, {}, {}, {}
 -- the job a button's key does, when it is not a bar button (nil otherwise)
 local function cmdOf(b)
 	local q = b.wb
@@ -110,6 +110,25 @@ local function refresh(b)
 		end
 		p:Show()
 	end
+	-- a job on a movement key's Alt / Shift / Ctrl copy (his autorun on Alt + E) keeps that key's arrow, small, in the top
+	-- left corner, so the movement keys still read as a set (his "the arrow icon got over wrote", Nov 24)
+	local dir = job and b.wb.mod ~= "" and wb.bareDir(b.wb)
+	if dir then
+		local a = arrows[b]
+		if not a then
+			a = b:CreateTexture(nil, "OVERLAY", nil, 2)
+			arrows[b] = a
+		end
+		local size = (b:GetHeight() or 36) * 0.42
+		a:SetSize(size, size)
+		a:ClearAllPoints()
+		a:SetPoint("TOPLEFT", b, "TOPLEFT", 2, -2)
+		wb.pointArrow(a, dir)
+		a:SetAlpha(0.9)
+		a:Show()
+	elseif arrows[b] then
+		arrows[b]:Hide()
+	end
 	if on then
 		hook(b)
 		local hk = b.HotKey
@@ -144,4 +163,5 @@ watch:SetScript("OnEvent", function(_, _, slot)
 	end
 end)
 
-ns.wb.jobs = { list = JOBS, showing = showing, pic = function(b) return pics[b] end } -- (for the tests)
+ns.wb.jobs = { list = JOBS, showing = showing, pic = function(b) return pics[b] end,
+	arrow = function(b) return arrows[b] end } -- (for the tests)

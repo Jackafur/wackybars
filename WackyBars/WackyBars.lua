@@ -2593,6 +2593,13 @@ ns.wb = {
 	editing = function() return editing end, moving = function() return moving end,
 	optionRows = {}, slash = {}, lookHooks = {}, applyHooks = {}, modeHooks = {},
 	port = port, -- (Profiles.lua: a profile that switches bars on or off hands out spare slots as the bar boxes do)
+	pointArrow = pointArrow,
+	-- (Jobs.lua: the way a button's bare key moves you, for the small arrow on a job that sits on a movement key)
+	bareDir = function(q)
+		local forced = DB and DB.moveKeys and FORCED_MOVES[DB.moveKeys]
+		if forced then return forced[q.spot.key] end
+		return q.spot.key and MOVES[GetBindingAction(q.spot.key) or ""] or nil
+	end,
 }
 
 -- Fill empty pet slots (his "fine then make a button that does it", Nov 10 night). Each demon keeps its own pet bar in the
