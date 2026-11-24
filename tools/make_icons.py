@@ -353,7 +353,47 @@ def combo(symbol_fn, inner, outer, direction):
     return img
 
 
-ICONS = [("interact", interact), ("assist", assist), ("clip", clip), ("downtime", downtime), ("hideui", hideui),
+def reply():
+    """Reply to whisper: a speech bubble with three dots, on whisper pink-purple."""
+    img = radial((170, 80, 160), (36, 10, 38))
+    m = Image.new("L", (S, S), 0)
+    d = ImageDraw.Draw(m)
+    d.rounded_rectangle([70, 100, 442, 340], 70, fill=255)
+    d.polygon([(150, 320), (230, 320), (120, 430)], fill=255)   # the tail
+    shadow(img, m)
+    paint(img, outline(m, 8), Image.new("RGBA", (S, S), (20, 6, 22, 255)))
+    paint(img, m, vgrad((S, S), (255, 250, 255), (215, 200, 220)))
+    dots = Image.new("L", (S, S), 0)
+    dd = ImageDraw.Draw(dots)
+    for cx in (166, 256, 346):
+        dd.ellipse([cx - 28, 192, cx + 28, 248], fill=255)
+    paint(img, dots, vgrad((S, S), (190, 80, 180), (120, 40, 120)))
+    vignette(img)
+    return img
+
+
+def clearmarker():
+    """Clear target marker: a grey star with a red slash, on dark slate."""
+    img = radial((70, 76, 90), (14, 16, 22))
+    m = Image.new("L", (S, S), 0)
+    pts = []
+    for i in range(10):
+        r = 200 if i % 2 == 0 else 84
+        a = -math.pi / 2 + i * math.pi / 5
+        pts.append((256 + r * math.cos(a), 270 + r * math.sin(a)))
+    ImageDraw.Draw(m).polygon(pts, fill=255)
+    shadow(img, m)
+    paint(img, outline(m, 7), Image.new("RGBA", (S, S), (10, 10, 14, 255)))
+    paint(img, m, vgrad((S, S), (200, 205, 215), (120, 125, 140)))
+    sl = Image.new("L", (S, S), 0)
+    ImageDraw.Draw(sl).line([(100, 420), (412, 100)], fill=255, width=42)
+    paint(img, outline(sl, 7), Image.new("RGBA", (S, S), (20, 4, 4, 255)))
+    paint(img, sl, vgrad((S, S), (255, 90, 80), (190, 30, 30)))
+    vignette(img)
+    return img
+
+
+ICONS = [("reply", reply), ("clearmarker", clearmarker), ("interact", interact), ("assist", assist), ("clip", clip), ("downtime", downtime), ("hideui", hideui),
          ("follow", follow), ("sit", sit), ("autorun", autorun)]
 def chevron(direction):
     """A movement key with no job, next to ones that have one (the Alt bar's S and D): just the chevron on the side it moves

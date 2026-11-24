@@ -27,6 +27,8 @@ local JOBS = {
 	SITORSTAND = { icon = DIR .. "sit", name = "Sit/Stand" },
 	TOGGLEAUTORUN = { icon = DIR .. "autorun", name = "Toggle Autorun" }, -- (on a key that doesn't move you)
 	ASSISTTARGET = { icon = DIR .. "assist", name = "Assist Target" }, -- (his Alt + A, Nov 24)
+	REPLY = { icon = DIR .. "reply", name = "Reply to Whisper" }, -- (his Alt + R, Nov 24)
+	RAIDTARGETNONE = { icon = DIR .. "clearmarker", name = "Clear Target Marker" }, -- (his Alt + Q, Nov 24)
 }
 -- the raid markers, with the game's own pictures (1 star, 2 circle, 3 diamond, 4 triangle, 5 moon, 6 square, 7 cross, 8 skull)
 for i = 1, 8 do
