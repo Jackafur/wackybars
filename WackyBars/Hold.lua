@@ -122,13 +122,16 @@ wb.optionRows[#wb.optionRows + 1] = {
 
 -- Shift and Ctrl: the copy bars of each, on a state driver while the box is ticked (out of a fight, after each apply and
 -- each mode change; the driver itself works in a fight).
-local MOD_HELD = { Shift = "[mod:shift] show; hide", Ctrl = "[mod:ctrl] show; hide" }
+-- The Alt keyboard bar too since Nov 24 (his "how do we make it so alt bar isnt shown when I hold ~": ~ is QuietHUD's show
+-- all, which brought the always-shown Alt bar up with everything); the Alt mouse bar, the pet bar, stays always shown.
+local MOD_HELD = { Shift = "[mod:shift] show; hide", MouseShift = "[mod:shift] show; hide", Ctrl = "[mod:ctrl] show; hide",
+	MouseCtrl = "[mod:ctrl] show; hide", Alt = "[mod:alt] show; hide" }
 local function fillMods()
 	if InCombatLockdown() then return end
 	local DB = wb.db()
 	local showAll = wb.editing() or wb.moving()
 	for _, bar in ipairs(wb.bars) do
-		local rule = MOD_HELD[(bar.id:gsub("^Mouse", ""))]
+		local rule = MOD_HELD[bar.id]
 		if rule then
 			UnregisterStateDriver(bar.frame, "visibility")
 			bar.wbHeld = DB and wb.barOn(bar) and not DB.modsAlways and true or false
@@ -148,7 +151,7 @@ local function tell(bar, on)
 	if QuietHUD_HeldBar then pcall(QuietHUD_HeldBar, bar.holders, on) end
 end
 for _, bar in ipairs(wb.bars) do
-	if bar.id == "MouseHyper" or MOD_HELD[(bar.id:gsub("^Mouse", ""))] then
+	if bar.id == "MouseHyper" or MOD_HELD[bar.id] then
 		bar.frame:HookScript("OnShow", function()
 			if bar.wbHeld and not (wb.editing() or wb.moving()) then tell(bar, true) end
 		end)
@@ -158,7 +161,7 @@ end
 wb.applyHooks[#wb.applyHooks + 1] = fillMods
 wb.modeHooks[#wb.modeHooks + 1] = fillMods
 wb.optionRows[#wb.optionRows + 1] = {
-	label = "Shift and Ctrl bars only while you hold Shift or Ctrl",
+	label = "Shift, Ctrl and Alt bars only while you hold that key (the Alt mouse bar always shows)",
 	get = function() local DB = wb.db() return DB and not DB.modsAlways end,
 	set = function(v) wb.db().modsAlways = (not v) or nil end,
 }
