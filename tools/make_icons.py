@@ -355,7 +355,20 @@ def combo(symbol_fn, inner, outer, direction):
 
 ICONS = [("interact", interact), ("assist", assist), ("clip", clip), ("downtime", downtime), ("hideui", hideui),
          ("follow", follow), ("sit", sit), ("autorun", autorun)]
+def chevron(direction):
+    """A movement key with no job, next to ones that have one (the Alt bar's S and D): just the chevron on the side it moves
+    you, on slate (his "when i said same style i meant the chevrons")."""
+    img = radial((70, 80, 96), (14, 16, 22))
+    c = chevron_mask(direction)
+    shadow(img, c, offset=(6, 8), blur=8)
+    paint(img, outline(c, 7), Image.new("RGBA", (S, S), (8, 10, 14, 255)))
+    paint(img, c, vgrad((S, S), (255, 255, 255), (200, 210, 225)))
+    vignette(img)
+    return img
+
+
 for dname in TURN:
+    ICONS.append(("chevron-" + dname, lambda dname=dname: chevron(dname)))
     ICONS.append(("move-" + dname, lambda dname=dname: move(dname)))
     ICONS.append(("autorun-" + dname, lambda dname=dname: combo(autorun, (70, 140, 200), (10, 30, 60), dname)))
     ICONS.append(("follow-" + dname, lambda dname=dname: combo(follow, (60, 120, 70), (10, 30, 14), dname)))

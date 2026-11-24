@@ -2181,8 +2181,8 @@ do
 		and pic(AF).wbIcon:match("follow%-right$"))
 	local AS, AD = _G.WackyBarsAltS, _G.WackyBarsAltD
 	check("... and that bar's other movement keys are pictures too (his \"icons in the same style for S and D\")",
-		AS.__shown and pic(AS) and pic(AS).wbIcon:match("move%-left$") and not AS.wb.arrowTex.__shown
-		and AD.__shown and pic(AD).wbIcon:match("move%-down$"))
+		AS.__shown and pic(AS) and pic(AS).wbIcon:match("chevron%-left$") and not AS.wb.arrowTex.__shown
+		and AD.__shown and pic(AD).wbIcon:match("chevron%-down$"))
 	check("... the plain bar keeps its faint arrows", _G.WackyBarsPlainS.wb.arrowTex.__shown and not _G.WackyBarsPlainS.__shown)
 	binds.F, binds["ALT-F"], binds.S, binds.D = fWas, afWas, sWas, dWas
 	M.fire("UPDATE_BINDINGS")

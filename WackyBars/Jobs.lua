@@ -56,6 +56,8 @@ local function movePic(b)
 	if not (DB and (DB.moveIcons or comboBars[q.bar]) and q.kind == "move" and q.move) then return nil end
 	local cmd = q.mod ~= "" and q.def and GetBindingAction(q.def) or ""
 	if COMBOS[cmd] then return DIR .. COMBOS[cmd] .. "-" .. q.move, cmd end
+	-- (on a bar drawn for autorun or follow, a plain chevron like theirs: his "i meant the chevrons"; else the arrow picture)
+	if not DB.moveIcons then return DIR .. "chevron-" .. q.move, MOVE_NAMES[q.move] end
 	return DIR .. "move-" .. q.move, MOVE_NAMES[q.move]
 end
 local function slotFull(b)
