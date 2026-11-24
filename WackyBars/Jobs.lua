@@ -32,7 +32,11 @@ for i = 1, 8 do
 	JOBS["RAIDTARGET" .. i] = { icon = "Interface\\TargetingFrame\\UI-RaidTargetingIcon_" .. i, name = "Raid marker " .. i }
 end
 
-local pics, labelled, hooked = {}, {}, {}
+local pics, labelled, hooked, tags = {}, {}, {}, {}
+-- A job on a movement key's Alt / Shift / Ctrl copy keeps the key's arrow (his rule, Nov 10); a short word under the arrow
+-- says the job instead of a picture (his "just do the regular E with no icon but maybe just include a stylized AUTO in
+-- there", Nov 24, after the boot and a boot with a corner arrow both looked weird).
+local TAGS = { TOGGLEAUTORUN = "AUTO" }
 -- the job a button's key does, when it is not a bar button (nil otherwise)
 local function cmdOf(b)
 	local q = b.wb
@@ -123,15 +127,40 @@ end
 -- button has such a job, so with none nothing runs.
 local watch = CreateFrame("Frame")
 watch.wbJobs = true -- (the tests tell it from Warlock HUD's)
+local function tagOf(b)
+	local t = b.wb.arrowTex
+	local word = t and t:IsShown() and b.wb.mod ~= "" and b.wb.def and TAGS[GetBindingAction(b.wb.def) or ""]
+	local f = tags[b]
+	if not word then
+		if f then f:Hide() end
+		return
+	end
+	local host = t:GetParent()
+	if not f then
+		f = host:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+		tags[b] = f
+	end
+	f:SetParent(host) -- (the arrow moves between its bar and the bar's holder; the word goes with it)
+	local font, size = f:GetFont()
+	if font then f:SetFont(font, size or 10, "OUTLINE") end
+	f:SetText(word)
+	f:SetTextColor(1, 0.82, 0.2) -- (the game's gold)
+	f:SetAlpha(0.8)
+	f:ClearAllPoints()
+	f:SetPoint("TOP", t, "BOTTOM", 0, 3)
+	f:Show()
+end
 local function refreshAll()
 	local any = false
 	for _, b in ipairs(wb.buttons) do
 		refresh(b)
+		tagOf(b)
 		if cmdOf(b) then any = true end
 	end
 	if any then watch:RegisterEvent("ACTIONBAR_SLOT_CHANGED") else watch:UnregisterEvent("ACTIONBAR_SLOT_CHANGED") end
 end
 wb.applyHooks[#wb.applyHooks + 1] = refreshAll
+wb.modeHooks[#wb.modeHooks + 1] = function() for _, b in ipairs(wb.buttons) do tagOf(b) end end
 
 watch:SetScript("OnEvent", function(_, _, slot)
 	for _, b in ipairs(wb.buttons) do
@@ -144,4 +173,5 @@ watch:SetScript("OnEvent", function(_, _, slot)
 	end
 end)
 
-ns.wb.jobs = { list = JOBS, showing = showing, pic = function(b) return pics[b] end } -- (for the tests)
+ns.wb.jobs = { list = JOBS, showing = showing, pic = function(b) return pics[b] end,
+	tag = function(b) return tags[b] end } -- (for the tests)

@@ -2170,6 +2170,8 @@ do
 	binds.E, binds["ALT-E"] = "MOVEFORWARD", "TOGGLEAUTORUN"
 	M.fire("UPDATE_BINDINGS")
 	check("Alt + E autorun (E moves you): E's arrow, no button", AE.wb.arrowTex.__shown and not AE.__shown)
+	local tg = wbNs.wb.jobs.tag(AE)
+	check("... with AUTO under the arrow (his \"stylized AUTO\")", tg and tg.__shown and tg.__text == "AUTO")
 	binds.E, binds["ALT-E"] = eWas, aeWas
 	M.fire("UPDATE_BINDINGS")
 	check("the Alt bar has B, N and a 4-wide Space (Alt + B, Alt + N, Alt + Space)", _G.WackyBarsAltB.wb.def == "ALT-B"
