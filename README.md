@@ -21,6 +21,22 @@ Your keys as action bars, placed like the keys (redesigned Nov 10). Shown by def
   a fight. Box in `/wbars`, ticked by default: the Hypershift bar shows only while End is held, at
   QuietHUD's opacity (it fades with the Action Bar 8 row like before). On green or red (no F14) untick it to keep the bar on screen. Edit
   keys and Move bars show it. Alt-tabbing out while holding it can leave it held: press it once more.
+- **Caps bars (Hold.lua, Nov 26; his "i wish there was another modifier key", after a focus target video):** box in `/wbars`,
+  off by default: "Caps bars: hold Caps and your keys cast on your focus". The game knows only Shift, Ctrl and Alt, and his
+  are all taken, so this modifier is made in the addon. While the Caps key is held, every plain key that fires a bar slot
+  (keyboard and mouse) presses its twin on two extra bars, Caps keyboard and Caps mouse. A twin has no key and no slot of
+  its own: it shows what the plain key in its spot fires (pages too) and casts it on your focus while you have one, else
+  on your target as usual. Keys that move you, pet keys, jobs like Interact and keys you hid keep their own job while
+  held. Caps + Shift and Caps + Ctrl (added the same night, his "how does it handle caps+shift for mana drain?"): with the Shift or Ctrl copy bars switched on, Shift + key and Ctrl + key press those bars' own buttons while the key is down, and for that long they cast on your focus too. Alt + key is never touched. The two bars show only while the key is held (and in Edit keys and
+  Move bars) and fade with their plain bar's row in QuietHUD. The key: the one on your Caps button, else CAPSLOCK;
+  `/wbars capskey KEY` names another. With the box ticked the Caps button leaves the plain keyboard bar. Who a twin casts
+  on is the button's `unit`, written by one state check of the game's (`[@focus,exists]`); the keys are override bindings
+  set and cleared by a secure snippet, so it works in a fight. Released in 0.6.0 (Nov 26), not seen in game before that.
+- **Focus keys (Hold.lua, Nov 26; his "so annoying have to set it to a bar"):** box in `/wbars`, off by default. `[` sets
+  your focus (what your mouse is over, else your target) and `]` clears it, through two hidden buttons that run the game's
+  `/focus` and `/clearfocus`, so no macro and no bar button. `[` and `]` are what his wheel tilts send; `/wbars focuskeys
+  SET CLEAR` names two others. Override bindings only, and only on a key that is free in Key Bindings or already your Focus
+  Target key. Released in 0.6.0 (Nov 26), not seen in game before that.
 - **Shift and Ctrl bars while held** (his ask, Nov 12): with a Shift or Ctrl copy switched on, its keyboard and mouse bars
   show only while you hold that key (the game's state driver, `[mod:shift]` / `[mod:ctrl]`, so in a fight too), at
   QuietHUD's opacity for their rows. Second box in `/wbars`, ticked by default; untick it to keep them on screen. Cost: the
@@ -111,12 +127,22 @@ is not faded. Pixel shift moves the bars. WackyBars has no fade settings of its 
   none. A Naowh import empties them unless its code lists them. The Caps button is the `\` key: on the Linux PC Caps
   types `\` (a custom KDE keyboard option), so the game never sees CAPSLOCK. Whatever you bind to `\` that isn't an
   action bar button (LockMenu) is left alone.
-- **Options:** `/wbars` (or a key in Key Bindings, WackyBars; also Esc, Options, AddOns): a box per bar (keyboard and
-  mouse side by side, a row each for Plain, Shift, Ctrl, Alt; Hypershift under them), a Caps box per row (unticked: the
-  two-wide Caps key is gone from that bar and its row closes up; Nov 13, Caps became his Interact key), staggered rows, show the modifier
-  in labels (`sQ`, `cQ`, `aQ`, `h1`; off by default, your pick), snap when moving bars, Edge buttons (E1, E2) and Wheel
-  click button (on; off takes them out of every bar, for a mouse without them, and the bar closes up), Move bars,
-  Edit keys, Reset places (places and sizes).
+- **Options:** `/wbars` (or a key in Key Bindings, WackyBars; also Esc, Options, AddOns): a window with four tabs along
+  the top, like QuietHUD's (Nov 26, his "we might have to make wbars menu better now": the one page had grown taller
+  than the screen). Move bars, Edit keys and Reset places (places and sizes) sit under every tab. `/wbars bars`, `held`,
+  `looks` or `extras` opens it on that tab; plain `/wbars` opens the tab you last had open.
+  - **Bars:** a box per bar (keyboard and mouse side by side, a row each for Plain, Shift, Ctrl, Alt; Hypershift under
+    them), a Caps Lock button box per row (the column was called Caps until the Caps bars came; unticked: the two-wide
+    Caps key is gone from that bar and its row closes up; Nov 13, Caps became his Interact key), Edge buttons (E1, E2)
+    and Wheel click button (on; off takes them out of every bar, for a mouse without them, and the bar closes up),
+    snap when moving bars.
+  - **Held keys and focus:** the bars that show only while a key is held (Hypershift, Shift and Ctrl, Alt), then the
+    Caps bars and the Focus keys, each with the `/wbars` word that sets its keys under the box.
+  - **Looks:** Look, Bar art, staggered rows, show the modifier in labels (`sQ`, `cQ`, `aQ`, `h1`; off by default, your
+    pick), then the movement keys together: which keys (Key Bindings, WASD, ESDF), Arrows, Movement keys as icons.
+  - **Extras:** Panic flash, Ready shine, Interrupt nudge, Profiles, Fill empty pet slots.
+  - A feature file puts its box on a tab with `tab`, `group` (the heading), `hint` (a grey line under it) and `last` on
+    its `wb.optionRows` row; a row that names no tab lands on Extras.
   Switching Caps, the edges, the wheel click or the stagger on or off leaves the other keys where they are on the
   screen: the bar's place moves instead (Nov 19; before, they slid over by a key, into the bar beside). Those switches
   are the same in every profile, so each saved profile's places move the same way (Nov 23).
@@ -133,7 +159,9 @@ is not faded. Pixel shift moves the bars. WackyBars has no fade settings of its 
 - **Edit keys:** hover a button, press the key you want (modifiers, middle and side mouse buttons, wheel). Esc on a
   button clears its key, right-click hides a button (faint while editing, right-click again brings it back),
   Esc elsewhere finishes. All of it is override bindings, gone when WackyBars is off.
-- Slash: `/wbars move`, `edit`, `scale <n|auto>` (every bar), `stagger`, `reset`, `status`, `drift` (what Colours drift costs).
+- Slash: `/wbars move`, `edit`, `scale <n|auto>` (every bar), `stagger`, `reset`, `status`, `drift` (what Colours drift costs),
+  `bars` / `held` / `looks` / `extras` (the options on that tab); from the feature files: `profile`, `capskey`, `focuskeys`,
+  `ding`, `fillpet`.
 - **First load after Nov 10** (and a new character): plain bars and Hypershift on, the copies off; the old mouse over,
   hide in fight, Lite and game bars settings, and spare slots of buttons that no longer exist, are dropped. Once only.
 

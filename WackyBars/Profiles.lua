@@ -162,33 +162,28 @@ local function tip(self)
 	GameTooltip:AddLine("Changes you make go into the profile you are on. Save: a new one, or Delete.", 0.7, 0.7, 0.7, true)
 	GameTooltip:Show()
 end
--- The row: WackyBars made a box labelled Profiles in the place it keeps for this file; the box goes, the label lines up with
--- Movement keys, Look and Arrows, and the name button and Save sit where their buttons do.
+-- The row: WackyBars made a box labelled Profiles on its Extras tab, in the place it keeps for this file, and handed the
+-- box and its label back (ROW.box, ROW.text); the box goes, the label lines up with Look, Arrows and Pet bar, and the name
+-- button and Save sit where their buttons do, on the same tab as the box.
+local ROW
 local function decorate()
 	if row then
 		refresh()
 		return
 	end
-	local options = _G.WackyBarsOptions
-	if not (options and options.GetRegions) then return end
-	local box, label
-	for _, r in ipairs({ options:GetRegions() }) do
-		if r.GetText and r.GetPoint and r:GetText() == LABEL then
-			local _, rel = r:GetPoint(1)
-			if type(rel) == "table" and rel.SetChecked then box, label = rel, r end
-		end
-	end
-	if not box then return end
+	local box, label = ROW.box, ROW.text
+	if not (box and label) then return end
+	local page = box:GetParent()
 	box:Hide()
 	label:ClearAllPoints()
 	label:SetPoint("LEFT", box, "LEFT", 4, 0)
-	local pick = CreateFrame("Button", "WackyBarsProfilePick", options, "UIPanelButtonTemplate")
+	local pick = CreateFrame("Button", "WackyBarsProfilePick", page, "UIPanelButtonTemplate")
 	pick:SetSize(160, 24)
 	pick:SetPoint("LEFT", box, "LEFT", 130, 0)
 	pick:SetScript("OnClick", nextProfile)
 	pick:SetScript("OnEnter", tip)
 	pick:SetScript("OnLeave", function() GameTooltip:Hide() end)
-	local save = CreateFrame("Button", "WackyBarsProfileSave", options, "UIPanelButtonTemplate")
+	local save = CreateFrame("Button", "WackyBarsProfileSave", page, "UIPanelButtonTemplate")
 	save:SetSize(60, 24)
 	save:SetPoint("LEFT", pick, "RIGHT", 6, 0)
 	save:SetText("Save")
@@ -198,15 +193,17 @@ local function decorate()
 end
 
 -- (the row's place: WackyBars asks get each time the window shows or the bars are applied, which is when the row is made and
--- kept up to date; were the box ever left, a click on it is the name button's click)
-wb.optionRows[#wb.optionRows + 1] = {
+-- kept up to date; were the box ever left, a click on it is the name button's click; last: under the Extras tab's boxes)
+ROW = {
 	label = LABEL,
+	tab = "extras", last = true,
 	get = function()
 		decorate()
 		return false
 	end,
 	set = nextProfile,
 }
+wb.optionRows[#wb.optionRows + 1] = ROW
 
 -- /wbars profile: the names; /wbars profile <name>: switch to it (for a macro).
 wb.slash.profile = function(rest)

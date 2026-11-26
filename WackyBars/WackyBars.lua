@@ -119,6 +119,26 @@ local SETS = {
 	{ id = "Mouse", name = "Mouse", spots = MOUSE },
 	{ id = "MouseHyper", name = "Hypershift", spots = HYPER, plainOnly = true, home = 8, short = "h" },
 }
+-- The Caps bars (Hold.lua; his ask, Nov 26: "add a caps action bar to wbars? for keyboard and mouse?"): a second keyboard bar
+-- and a second mouse bar for a held key. Their buttons have no key and no slot of their own: each is the twin of the plain
+-- key in the same spot (twin: that bar's id) and shows what that key does, cast on your focus while you have one. held
+-- marks them; they exist only with the box in /wbars ticked (barOn), off by default.
+do
+	local keys, grid = {}, {}
+	for _, S in ipairs(KEYBOARD) do
+		if S.key and not S.fixedMod and S.name ~= "Caps" and (not S.only or S.only.Plain) then
+			keys[#keys + 1] = { name = S.name, label = S.label, x = S.x, sx = S.sx, row = S.row, wide = S.wide }
+		end
+	end
+	for i = 1, 12 do
+		local x = (i - 1) % 3
+		grid[i] = { name = "Side" .. i, label = tostring(i), x = x, sx = x, row = 1 + math.floor((i - 1) / 3) }
+	end
+	SETS[#SETS + 1] = { id = "Caps", name = "Caps keyboard", spots = keys, plainOnly = true, staggers = true, arrows = true,
+		held = true, twin = "Plain", short = "f" }
+	SETS[#SETS + 1] = { id = "MouseCaps", name = "Caps mouse", spots = aroundGrid(grid), plainOnly = true, held = true,
+		twin = "MousePlain", short = "f" }
+end
 -- The bars that show by default: the plain ones and Hypershift; the Shift, Ctrl and Alt copies are there to switch on.
 local DEFAULT_ON = { Plain = true, MousePlain = true, MouseHyper = true }
 
@@ -217,11 +237,11 @@ for si, set in ipairs(SETS) do
 		local bar = { id = set.id .. (set.plainOnly and "" or L.id), name = set.name .. (L.mod == "" and "" or (" " .. L.id)), set = set,
 			layerIndex = li, short = set.short or L.short, arrows = {}, buttons = {},
 			-- (the Alt mouse bar goes with the plain mouse bar: his pick, Nov 10)
-			follow = (L.id == "Alt" and set.id == "Mouse") and "MousePlain" or L.follow }
+			follow = (L.id == "Alt" and set.id == "Mouse") and "MousePlain" or (set.held and set.twin) or L.follow }
 		-- (the Hypershift, Shift and Ctrl bars and the Alt keyboard bar are protected frames of their own: Hold.lua shows them from
 		-- secure code while their key is held, in a fight too; WackyBars itself only shows, hides, moves or sizes bars out of a
 		-- fight. The Alt mouse bar, your pet bar, is not held: it always shows)
-		local held = set.id == "MouseHyper" or (not set.plainOnly and (L.id == "Shift" or L.id == "Ctrl"))
+		local held = set.id == "MouseHyper" or set.held or (not set.plainOnly and (L.id == "Shift" or L.id == "Ctrl"))
 			or (set.id == "" and L.id == "Alt")
 		local f = CreateFrame("Frame", "WackyBars" .. bar.id, container, held and "SecureFrameTemplate" or nil)
 		f:SetMovable(true)
@@ -283,7 +303,11 @@ local function runHooks(list)
 		end
 	end
 end
-local function barOn(bar) return not (DB and DB.off[bar.id]) end
+local function barOn(bar)
+	-- (the Caps bars: only their own box switches them on, Hold.lua; no bar box, and an old saved "off" never counts)
+	if bar.set.held then return DB and DB.capsHold and true or false end
+	return not (DB and DB.off[bar.id])
+end
 -- A button counts when its bar is on, you haven't hidden it (right-click in Edit keys) and it has a slot. One that does not
 -- count shows nothing and sets no key.
 local function hiddenButton(b) return DB and DB.hidden[b.wb.id] end
@@ -294,7 +318,9 @@ local function hiddenButton(b) return DB and DB.hidden[b.wb.id] end
 local function spotGone(S, bar)
 	if not DB then return false end
 	return (DB.noEdges and (S.name == "Edge1" or S.name == "Edge2")) or (DB.noWheel and S.name == "Wheel")
-		or (S.name == "Caps" and DB.noCaps and bar and bar.layerIndex and DB.noCaps[LAYERS[bar.layerIndex].id]) or false
+		or (S.name == "Caps" and DB.noCaps and bar and bar.layerIndex and DB.noCaps[LAYERS[bar.layerIndex].id])
+		-- (with the Caps bars on, Caps is the key you hold: its own button on the plain keyboard bar goes; Hold.lua)
+		or (S.name == "Caps" and DB.capsHold and not DB.capsKey and bar and bar.id == "Plain") or false
 end
 local function active(b)
 	return (b.wb.slot ~= nil or b.wb.pet ~= nil) and barOn(b.wb.bar) and not hiddenButton(b) and not spotGone(b.wb.spot, b.wb.bar)
@@ -406,7 +432,7 @@ local function port()
 		for _, b in ipairs(buttons) do
 			local q = b.wb
 			if q.bar.layerIndex == li and q.kind ~= "mirror" and q.kind ~= "move" and q.kind ~= "pet" and q.kind ~= "job"
-				and not q.slot and barOn(q.bar)
+				and not q.slot and barOn(q.bar) and not q.bar.set.held
 				and not hiddenButton(b) and not spotGone(q.spot, q.bar) then
 				while pool[p] and (taken[pool[p]] or HasAction(pool[p])) do p = p + 1 end
 				if pool[p] then
@@ -429,7 +455,8 @@ end
 -- c and a for Ctrl and Alt. (All inside this function: the file is at Lua's limit of 200 locals.)
 local function hotkeyText(b)
 	local k = effKey(b)
-	if not k then return nil end
+	-- (a Caps bar button has no key of its own: it reads as the key in its spot)
+	if not k then return (b.wb.bar.set.held and b.wb.slot and not hiddenButton(b)) and label(b) or nil end
 	if k == b.wb.def then return label(b) end
 	-- (his Caps key sends Page Up inside games, xremap, since Nov 13: bound on the Caps button it still reads Caps, not the
 	-- game's "Page Up" cut off to "Pa..."; the owner, Nov 18: "can make it so this still says caps")
@@ -1193,7 +1220,7 @@ local function layout()
 	local between, y = size * 0.75, 140
 	local plain, total = {}, 0
 	for _, bar in ipairs(wbBars) do
-		if bar.layerIndex == 1 then
+		if bar.layerIndex == 1 and not bar.set.held then
 			plain[#plain + 1] = bar
 			total = total + dims[bar].w * sizeOf(bar)
 		end
@@ -1206,8 +1233,10 @@ local function layout()
 	end
 	local midY = UIParent:GetHeight() / 2
 	for _, copy in ipairs(wbBars) do
-		if copy.layerIndex > 1 then
-			local w, h, step = dims[copy].w * sizeOf(copy), dims[copy].h * sizeOf(copy), (copy.layerIndex - 2) * 30
+		if copy.layerIndex > 1 or copy.set.held then
+			-- (the Caps bars: one step past the Alt copies)
+			local w, h, step = dims[copy].w * sizeOf(copy), dims[copy].h * sizeOf(copy),
+				((copy.set.held and (#LAYERS + 1) or copy.layerIndex) - 2) * 30
 			local left = copy.set.staggers and (-w - 10) or 10
 			copy.defaultPoint = { "BOTTOMLEFT", "BOTTOM", left + step, midY - h / 2 - step }
 		end
@@ -1444,6 +1473,19 @@ local function apply()
 		return
 	end
 	pending, applying = false, true
+	-- The Caps bars' buttons (Hold.lua): each takes after the plain key in its spot, the twin. A key that fires a slot (a game
+	-- bar's, with its pages, or a spare one) is shown; a key that moves you keeps its arrow; any other key (a pet key, a job
+	-- like Interact, one you hid or unbound) leaves the spot empty, and that key does its own thing while Caps is held.
+	for _, b in ipairs(buttons) do
+		local q = b.wb
+		if q.bar.set.held then
+			local tb = _G["WackyBars" .. q.bar.set.twin .. q.spot.name]
+			local t = tb and tb.wb
+			local key = t and barOn(q.bar) and t.slot and (t.kind == "mirror" or t.kind == "free") and effKey(tb) or nil
+			q.kind, q.game, q.n = (key and t.kind == "mirror") and "mirror" or "free", key and t.game or nil, key and t.n or nil
+			q.slot, q.twinKey, q.move = key and t.slot or nil, key, (t and barOn(q.bar)) and t.move or nil
+		end
+	end
 	-- Which bars show (fading, mouse over and fights are QuietHUD's).
 	for _, bar in ipairs(wbBars) do
 		bar.frame:SetShown(barOn(bar))
@@ -2177,15 +2219,19 @@ function WackyBars_ToggleMove()
 	if moving then stopModes() else startMove() end
 end
 
--- The options window: which bars show, staggered rows, the game bars, size, and the buttons for the two modes.
+-- The options window, four tabs along the top as in QuietHUD's window (his "we might have to make wbars menu better now",
+-- Nov 26: the one page had grown to about 885 high, taller than the game's screen at the default UI scale): Bars (which
+-- bars show, which buttons are on them), Held keys and focus (bars that show only while a key is held, the Caps bars, the
+-- focus keys), Looks (the look, labels, the movement keys) and Extras (the flashes, Profiles, the pet bar). Move bars,
+-- Edit keys and Reset places sit under every tab. toggleOptions(tab) opens the window on that tab (/wbars looks).
 local options
-local function toggleOptions()
+local function toggleOptions(tab)
 	if not options then
 		local ok, w = pcall(CreateFrame, "Frame", "WackyBarsOptions", UIParent, "ButtonFrameTemplate")
 		local framed = ok and w and w.SetTitle and type(w.Inset) == "table"
 		if ok and w and not framed then w:Hide() end
 		options = framed and w or CreateFrame("Frame", "WackyBarsOptions", UIParent)
-		options:SetSize(400, 84 + 4 * 26 + 56 + 26 + 30 + 30 + 30 + 30 + 144 + 50 + 30 * #(ns.wb and ns.wb.optionRows or {}))
+		options:SetSize(400, 300) -- (as wide as the longest label and the tabs, as tall as the tallest page: set below)
 		options:SetPoint("CENTER")
 		options:SetFrameStrata("DIALOG")
 		options:SetClampedToScreen(true)
@@ -2208,20 +2254,32 @@ local function toggleOptions()
 			local close = CreateFrame("Button", nil, options, "UIPanelCloseButton")
 			close:SetPoint("TOPRIGHT", 2, 2)
 		end
+		-- A page per tab: a frame over the whole window that holds that tab's boxes, so showing a tab is showing its page.
+		-- The helpers below build into `page`, at places counted from the window's top left; low is how far down each
+		-- page reaches (the tallest one sets the window's height).
+		local TABS = { { "bars", "Bars" }, { "held", "Held keys and focus" }, { "looks", "Looks" }, { "extras", "Extras" } }
+		local pages, low, page = {}, {}, nil
+		for _, t in ipairs(TABS) do
+			local p = CreateFrame("Frame", nil, options)
+			p:SetAllPoints()
+			pages[t[1]] = p
+		end
 		local controls = {}
 		local function text(x, y, s, font)
-			local t = options:CreateFontString(nil, "OVERLAY", font or "GameFontNormal")
+			local t = page:CreateFontString(nil, "OVERLAY", font or "GameFontNormal")
 			t:SetPoint("TOPLEFT", x, y)
 			t:SetText(s)
+			low[page] = math.min(low[page] or 0, y - 14)
 			return t
 		end
 		-- (the window is as wide as its longest box label: his "probably fix width", Nov 11, when Ready shine's and Interrupt
 		-- nudge's ran out of it)
 		local widest = 400
 		local function check(x, y, label, get, set)
-			local c = CreateFrame("CheckButton", nil, options, "UICheckButtonTemplate")
+			local c = CreateFrame("CheckButton", nil, page, "UICheckButtonTemplate")
 			c:SetPoint("TOPLEFT", x, y)
-			local t = options:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
+			low[page] = math.min(low[page] or 0, y - 32)
+			local t = page:CreateFontString(nil, "OVERLAY", "GameFontHighlight")
 			t:SetPoint("LEFT", c, "RIGHT", 2, 0)
 			t:SetText(label)
 			local cw, tw = c:GetWidth(), t:GetStringWidth()
@@ -2237,17 +2295,21 @@ local function toggleOptions()
 				apply()
 			end)
 			controls[#controls + 1] = function() c:SetChecked(get() and true or false) end
+			return c, t
 		end
 		local function button(x, y, width, label, fn)
-			local b = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
+			local b = CreateFrame("Button", nil, page, "UIPanelButtonTemplate")
 			b:SetSize(width, 24)
 			b:SetPoint("TOPLEFT", x, y)
+			low[page] = math.min(low[page] or 0, y - 24)
 			b:SetText(label)
 			b:SetScript("OnClick", function(self) fn(self) end)
 			return b
 		end
-		-- the bars: a box per bar, keyboard and mouse side by side, one row per modifier; Hypershift under them. How they fade,
-		-- show on mouse over or in a fight is set in QuietHUD, with your other bars.
+
+		-- BARS: a box per bar, keyboard and mouse side by side, one row per modifier; Hypershift under them; then which
+		-- buttons are on them. How they fade, show on mouse over or in a fight is set in QuietHUD, with your other bars.
+		page = pages.bars
 		local function barById(id)
 			for _, bar in ipairs(wbBars) do if bar.id == id then return bar end end
 		end
@@ -2255,10 +2317,13 @@ local function toggleOptions()
 			local bar = barById(id)
 			if bar then check(x, y, name or "", function() return barOn(bar) end, function(v) DB.off[bar.id] = (not v) or nil end) end
 		end
-		text(20, -70, "Bars")
 		text(140, -72, "Keyboard", "GameFontHighlightSmall")
 		text(246, -72, "Mouse", "GameFontHighlightSmall")
-		text(330, -72, "Caps", "GameFontHighlightSmall")
+		-- (was "Caps": next to the Caps bars that read as a third kind of bar; it is the Caps Lock key's own button on each
+		-- keyboard bar. Centred over its boxes.)
+		local capsHead = text(300, -72, "Caps Lock button", "GameFontHighlightSmall")
+		capsHead:ClearAllPoints()
+		capsHead:SetPoint("TOP", page, "TOPLEFT", 348, -72)
 		for i, L in ipairs(LAYERS) do
 			local y = -84 - (i - 1) * 26
 			text(24, y - 6, L.mod == "" and "Plain" or L.id, "GameFontHighlight")
@@ -2273,38 +2338,22 @@ local function toggleOptions()
 		end
 		local below = -84 - #LAYERS * 26
 		barBox(20, below, "MouseHyper", "Hypershift")
-		-- (how each bar fades, shows on mouse over, with the whole HUD or lets clicks through: QuietHUD's Action bars page,
-		-- where each row is named after the WackyBars bars on it; one place for all of it)
-		text(24, below - 26, "How bars fade and show: QuietHUD (if installed), Action bars page.", "GameFontHighlightSmall")
-		below = below - 56
-		check(20, below, "Staggered keyboard rows", function() return DB.stagger end, function(v) DB.stagger = v or nil end)
-		check(20, below - 26, "Show the modifier in labels (sQ, cQ, aQ, h1)", function() return DB.mods end,
-			function(v) DB.mods = v or nil end)
-		check(20, below - 52, "Snap when moving bars (like Edit Mode)", function() return not DB.noSnap end,
-			function(v) DB.noSnap = (not v) or nil; if moving then drawGrid() end end)
-		check(20, below - 78, "Edge buttons (E1, E2)", function() return not DB.noEdges end,
+		text(24, below - 36, "Caps bars: on the Held keys and focus tab.", "GameFontDisableSmall") -- (clear of Hypershift's box)
+		check(20, below - 56, "Edge buttons (E1, E2)", function() return not DB.noEdges end,
 			function(v) DB.noEdges = (not v) or nil end)
-		check(200, below - 78, "Wheel click button", function() return not DB.noWheel end,
+		check(200, below - 56, "Wheel click button", function() return not DB.noWheel end,
 			function(v) DB.noWheel = (not v) or nil end)
-		below = below - 26
-		-- Movement keys: one button cycles Key Bindings, WASD, ESDF (three states, so not boxes)
-		text(24, below - 86, "Movement keys", "GameFontHighlight")
-		local MOVE_MODES = { false, "WASD", "ESDF" }
-		local moveCycle = button(150, below - 80, 160, "", function()
-			if InCombatLockdown() then say("after the fight.") return end
-			local at = 1
-			for i, m in ipairs(MOVE_MODES) do if (DB.moveKeys or false) == m then at = i end end
-			DB.moveKeys = MOVE_MODES[at % #MOVE_MODES + 1] or nil
-			port()
-			apply()
-		end)
-		controls[#controls + 1] = function() moveCycle:SetText(DB.moveKeys or "From Key Bindings") end
-		below = below - 30
+		check(20, below - 82, "Snap when moving bars (like Edit Mode)", function() return not DB.noSnap end,
+			function(v) DB.noSnap = (not v) or nil; if moving then drawGrid() end end)
+
+		-- LOOKS: the look, the bar art, the rows and the labels; then the movement keys (which keys, how strong their
+		-- arrows are, and the feature files' boxes about them).
+		page = pages.looks
 		-- Look: Default (your Action Bar 1's, BetterBlizzFrames' dark with it) or a colour look (the look block above). Six looks
 		-- are too many to step through one click at a time, so the button opens a short list, the game's own menu: any look in
 		-- two clicks, Default always on top (idea 8, decided by the commandments: clear, most intuitive). Without that menu it
 		-- steps through them.
-		text(24, below - 86, "Look", "GameFontHighlight")
+		text(24, -76, "Look", "GameFontHighlight")
 		local function setLook(id)
 			DB.look = id
 			matchLook()
@@ -2329,7 +2378,7 @@ local function toggleOptions()
 				if type(e) == "table" and e.SetEnabled then e:SetEnabled(function() return lookOf() ~= nil end) end
 			end
 		end
-		local lookButton = button(150, below - 80, 210, "", function(self) -- (wider: "Purple to pink + glass + drift")
+		local lookButton = button(150, -70, 210, "", function(self) -- (wider: "Purple to pink + glass + drift")
 			if MenuUtil and MenuUtil.CreateContextMenu then
 				MenuUtil.CreateContextMenu(self, lookMenu)
 				return
@@ -2342,17 +2391,31 @@ local function toggleOptions()
 			local L = lookOf()
 			lookButton:SetText(L and (L.name .. (DB.glass and " + glass" or "") .. (DB.drift and " + drift" or "")) or "Default")
 		end
-		below = below - 30
 		-- Bar art: the faint wing in empty buttons, as on Action Bar 1 with its bar art; off (the default) a plain dark slot, as
 		-- on the game's other bars (his "any way to turn the bar art off in wbars?", Nov 10)
-		check(20, below - 82, "Bar art (the faint wing in empty buttons)", function() return DB.barArt end,
+		check(20, -100, "Bar art (the faint wing in empty buttons)", function() return DB.barArt end,
 			function(v) DB.barArt = v or nil end)
-		below = below - 30
+		check(20, -126, "Staggered keyboard rows", function() return DB.stagger end, function(v) DB.stagger = v or nil end)
+		check(20, -152, "Show the modifier in labels (sQ, cQ, aQ, h1)", function() return DB.mods end,
+			function(v) DB.mods = v or nil end)
+		text(20, -194, "Movement keys")
+		-- Which keys: one button cycles Key Bindings, WASD, ESDF (three states, so not boxes)
+		text(24, -218, "Which keys", "GameFontHighlight")
+		local MOVE_MODES = { false, "WASD", "ESDF" }
+		local moveCycle = button(150, -212, 160, "", function()
+			if InCombatLockdown() then say("after the fight.") return end
+			local at = 1
+			for i, m in ipairs(MOVE_MODES) do if (DB.moveKeys or false) == m then at = i end end
+			DB.moveKeys = MOVE_MODES[at % #MOVE_MODES + 1] or nil
+			port()
+			apply()
+		end)
+		controls[#controls + 1] = function() moveCycle:SetText(DB.moveKeys or "From Key Bindings") end
 		-- Arrows: how strong the movement arrows are (his ask, Nov 10: "make that an option we can change"); one button cycles
 		-- the steps, 30% the default. QuietHUD's fade multiplies on top (30% at his 0.6 Shown is 18% on screen).
-		text(24, below - 86, "Arrows", "GameFontHighlight")
+		text(24, -248, "Arrows", "GameFontHighlight")
 		local ARROW_STEPS = { 0.2, 0.3, 0.5, 0.7, 1 }
-		local arrowCycle = button(150, below - 80, 160, "", function()
+		local arrowCycle = button(150, -242, 160, "", function()
 			local at = 2
 			for i, v in ipairs(ARROW_STEPS) do if math.abs((DB.arrowAlpha or 0.3) - v) < 0.01 then at = i end end
 			local v = ARROW_STEPS[at % #ARROW_STEPS + 1]
@@ -2363,24 +2426,109 @@ local function toggleOptions()
 		controls[#controls + 1] = function()
 			arrowCycle:SetText(("%d%%"):format(math.floor((DB.arrowAlpha or 0.3) * 100 + 0.5)))
 		end
-		below = below - 30
-		-- the boxes the feature files add (ns.wb.optionRows: { label, get, set }), one row each
-		for _, r in ipairs(ns.wb and ns.wb.optionRows or {}) do
-			check(20, below - 82, r.label, r.get, r.set)
-			below = below - 30
+		-- The boxes the feature files add (ns.wb.optionRows, see ns.wb below), each on the tab it names (Extras when it
+		-- names none), under its group's heading, with its grey hint line under it; a row marked last goes under the others
+		-- of its tab. The row gets its box and label back (r.box, r.text: Profiles.lua makes its row out of them).
+		local at = { bars = low[pages.bars] or -70, held = -70, looks = -270, extras = -70 }
+		local headed = { looks = "Movement keys" }
+		local function addRow(r)
+			local key = pages[r.tab] and r.tab or "extras"
+			page = pages[key]
+			local y = at[key]
+			if r.group and r.group ~= headed[key] then
+				if y < -70 then y = y - 12 end
+				text(20, y, r.group)
+				y = y - 18
+				headed[key] = r.group
+			end
+			r.box, r.text = check(20, y, r.label, r.get, r.set)
+			y = y - 26
+			if r.hint then
+				text(54, y - 2, r.hint, "GameFontDisableSmall")
+				y = y - 14
+			end
+			at[key] = y
 		end
-		options:SetWidth(math.ceil(widest))
-		text(24, below - 88, "Size: Move bars, click a bar (each bar its own, like Edit Mode)", "GameFontHighlightSmall")
-		button(20, below - 110, 170, "Move bars", function() options:Hide() startMove() end)
-		button(200, below - 110, 170, "Edit keys", function() options:Hide() startEdit() end)
-		-- (his "fine then make a button that does it", Nov 10 night: the demon that is out gets its missing abilities and
-		-- commands back into its empty pet slots; ns.wb.fillPet, end of this file)
-		button(200, below - 144, 170, "Fill empty pet slots", function() if ns.wb.fillPet then ns.wb.fillPet() end end)
-		button(20, below - 144, 170, "Reset places", function()
+		for pass = 1, 2 do
+			for _, r in ipairs(ns.wb and ns.wb.optionRows or {}) do
+				if (r.last and 2 or 1) == pass then addRow(r) end
+			end
+		end
+		-- (how each bar fades, shows on mouse over, with the whole HUD or lets clicks through: QuietHUD's Action bars page,
+		-- where each row is named after the WackyBars bars on it; one place for all of it)
+		page = pages.looks
+		text(24, at.looks - 12, "How bars fade and show: QuietHUD (if installed), Action bars page.", "GameFontHighlightSmall")
+		-- EXTRAS, under the feature files' rows: the pet bar (his "fine then make a button that does it", Nov 10 night: the
+		-- demon that is out gets its missing abilities and commands back into its empty pet slots; ns.wb.fillPet, end of
+		-- this file)
+		page = pages.extras
+		text(24, at.extras - 12, "Pet bar", "GameFontHighlight")
+		button(150, at.extras - 6, 170, "Fill empty pet slots", function() if ns.wb.fillPet then ns.wb.fillPet() end end)
+
+		-- The tabs, as QuietHUD's window has them: the game's top tabs after the portrait (plain buttons in the fallback
+		-- window, the open one greyed out).
+		local tabs, tabX = {}, 16
+		local function showTab(key)
+			if not pages[key] then key = TABS[1][1] end
+			for i, t in ipairs(TABS) do
+				pages[t[1]]:SetShown(t[1] == key)
+				if options.numTabs then
+					if t[1] == key then PanelTemplates_SetTab(options, i) end
+				elseif tabs[i].SetEnabled then
+					tabs[i]:SetEnabled(t[1] ~= key)
+				end
+			end
+		end
+		options.wbShowTab = showTab
+		for i, t in ipairs(TABS) do
+			local b
+			if framed then
+				b = CreateFrame("Button", nil, options, "PanelTopTabButtonTemplate")
+				if i == 1 then b:SetPoint("TOPLEFT", 51, -28) end
+			else
+				b = CreateFrame("Button", nil, options, "UIPanelButtonTemplate")
+				local bw = math.max(44, math.floor(#t[2] * 6.4 + 18))
+				b:SetSize(bw, 22)
+				b:SetPoint("TOPLEFT", tabX, -36)
+				tabX = tabX + bw + 4
+			end
+			b:SetText(t[2])
+			if framed and PanelTemplates_TabResize then PanelTemplates_TabResize(b, 0) end
+			b:SetScript("OnClick", function() showTab(t[1]) end)
+			tabs[i] = b
+		end
+		local tabsRight = tabX
+		if framed and PanelTemplates_SetNumTabs then
+			options.Tabs = tabs
+			PanelTemplates_SetNumTabs(options, #tabs) -- (anchors each tab to the one before it, 3 apart)
+			tabsRight = 51 + 3 * (#tabs - 1) + 7
+			for _, b in ipairs(tabs) do tabsRight = tabsRight + (b:GetWidth() or 0) end
+		end
+
+		-- Under every tab: the size note, and Move bars, Edit keys and Reset places in the window's button bar (framed) or
+		-- above the bottom edge (plain). The window is as wide as the longest label and the tabs, as tall as the tallest page.
+		local tallest = 0
+		for _, t in ipairs(TABS) do tallest = math.max(tallest, -(low[pages[t[1]]] or 0)) end
+		-- (the plain window at least 424 wide: its three buttons side by side)
+		options:SetSize(math.ceil(math.max(widest, tabsRight + 10, framed and 0 or 424)), math.ceil(tallest + (framed and 54 or 66)))
+		page = options
+		local note = text(24, 0, "Size: Move bars, click a bar (each bar its own, like Edit Mode)", "GameFontHighlightSmall")
+		note:ClearAllPoints()
+		note:SetPoint("BOTTOMLEFT", 24, framed and 34 or 46)
+		local function foot(point, x, label, fn)
+			local b = button(0, 0, 130, label, fn)
+			b:SetSize(130, framed and 22 or 24)
+			b:ClearAllPoints()
+			b:SetPoint(point, x, framed and 4 or 14)
+		end
+		foot("BOTTOMLEFT", framed and 4 or 16, "Move bars", function() options:Hide() startMove() end)
+		foot("BOTTOM", 0, "Edit keys", function() options:Hide() startEdit() end)
+		foot("BOTTOMRIGHT", framed and -6 or -16, "Reset places", function()
 			if InCombatLockdown() then say("after the fight.") return end
 			DB.pos, DB.sizes = {}, {}
 			apply()
 		end)
+		showTab(TABS[1][1])
 		refreshOptions = function()
 			if options and options:IsShown() then
 				for _, f in ipairs(controls) do f() end
@@ -2389,7 +2537,11 @@ local function toggleOptions()
 		options:SetScript("OnShow", refreshOptions)
 		options:Hide()
 	end
-	if options:IsShown() then
+	if tab then -- (a tab's word: the window opens on it, or goes to it when it is open; the last tab stays for next time)
+		options.wbShowTab(tab)
+		if not options:IsShown() then options:Show() end
+		refreshOptions()
+	elseif options:IsShown() then
 		options:Hide()
 	else
 		options:Show()
@@ -2542,6 +2694,8 @@ SlashCmdList.WACKYBARS = function(msg)
 	if extra then extra(rest) return end
 	if cmd == "" or cmd == "options" then
 		toggleOptions()
+	elseif cmd == "bars" or cmd == "held" or cmd == "looks" or cmd == "extras" then
+		toggleOptions(cmd) -- (the options, on that tab)
 	elseif cmd == "edit" then
 		WackyBars_ToggleEdit()
 	elseif cmd == "move" then
@@ -2577,13 +2731,16 @@ SlashCmdList.WACKYBARS = function(msg)
 		local words = {}
 		for w in pairs(ns.wb and ns.wb.slash or {}) do words[#words + 1] = w end
 		table.sort(words)
-		say("/wbars (options), move, edit, scale <n|auto>, stagger, reset, status, drift" .. (#words > 0 and (", " .. table.concat(words, ", ")) or ""))
+		say("/wbars (options; bars, held, looks or extras opens that tab), move, edit, scale <n|auto>, stagger, reset, status, drift"
+			.. (#words > 0 and (", " .. table.concat(words, ", ")) or ""))
 	end
 end
 
 -- For WackyBars' feature files, listed after this one in the TOC (the ideas he picked on Nov 10 night): what they may use
 -- and where they plug in, so each lives in a file of its own instead of editing this one. optionRows: a box each in /wbars
--- ({ label, get, set }, set runs out of a fight, then the bars are applied again); slash: /wbars <word> = fn(rest);
+-- ({ label, get, set }, set runs out of a fight, then the bars are applied again; also tab = "bars", "held", "looks" or
+-- "extras" (none: Extras), group = the heading it sits under on that tab, hint = a grey line under it, such as the /wbars
+-- word that sets what the box can't, last = true to sit under its tab's other rows); slash: /wbars <word> = fn(rest);
 -- lookHooks: after each look update; applyHooks: after each apply (out of a fight, everything in place); modeHooks: after
 -- Move bars starts and after Move bars or Edit keys ends.
 ns.wb = {

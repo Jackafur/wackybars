@@ -188,6 +188,7 @@ end)
 
 wb.optionRows[#wb.optionRows + 1] = {
 	label = "Movement keys as icons (else faint arrows)",
+	tab = "looks", group = "Movement keys",
 	get = function() local DB = wb.db() return DB and DB.moveIcons and true or false end,
 	set = function(v) wb.db().moveIcons = v and true or nil end,
 }

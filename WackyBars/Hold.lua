@@ -116,6 +116,7 @@ end
 
 wb.optionRows[#wb.optionRows + 1] = {
 	label = "Hypershift bar only while you hold Hypershift (Naga blue profile)",
+	tab = "held", group = "Bars that show only while you hold a key",
 	get = function() local DB = wb.db() return DB and not DB.hyperAlways end,
 	set = function(v) wb.db().hyperAlways = (not v) or nil end,
 }
@@ -158,7 +159,7 @@ end
 local mouseAlt
 for _, bar in ipairs(wb.bars) do if bar.id == "MouseAlt" then mouseAlt = bar end end
 for _, bar in ipairs(wb.bars) do
-	if bar.id == "MouseHyper" or MOD_HELD[bar.id] then
+	if bar.id == "MouseHyper" or MOD_HELD[bar.id] or bar.set.held then
 		bar.frame:HookScript("OnShow", function()
 			if bar.wbHeld and not (wb.editing() or wb.moving()) then
 				tell(bar, true)
@@ -175,11 +176,231 @@ wb.applyHooks[#wb.applyHooks + 1] = fillMods
 wb.modeHooks[#wb.modeHooks + 1] = fillMods
 wb.optionRows[#wb.optionRows + 1] = {
 	label = "Shift and Ctrl bars only while you hold Shift or Ctrl",
+	tab = "held", group = "Bars that show only while you hold a key",
 	get = function() local DB = wb.db() return DB and not DB.modsAlways end,
 	set = function(v) wb.db().modsAlways = (not v) or nil end,
 }
 wb.optionRows[#wb.optionRows + 1] = {
 	label = "Alt keyboard bar only while you hold Alt",
+	tab = "held", group = "Bars that show only while you hold a key",
 	get = function() local DB = wb.db() return DB and DB.altHeld and true or false end,
 	set = function(v) wb.db().altHeld = v and true or nil end,
 }
+
+-- The Caps bars (his ask, Nov 26, after a focus target video: "i wish there was another modifier key", "add a caps action bar to
+-- wbars? for keyboard and mouse?"). The game knows three modifiers and all three are taken, so this one is made here: while
+-- the Caps key is held, each plain key that fires a bar slot presses its twin on the Caps bars instead (WackyBars.lua: same
+-- spot, same slot, pages too), and the twins cast on your focus while you have one. So Caps + a key is that key's spell on
+-- your focus; with no focus set it is the plain spell, on your target. Let go and every key is the plain one again. Keys
+-- that do something else (moving, Interact, the pet bar, a key you hid) are left alone while held. Shift, Ctrl and Alt + key
+-- keep their own jobs. The two bars show only while the key is held (and in Edit keys and Move bars).
+-- The key: the one on your Caps button (Edit keys), else CAPSLOCK; /wbars capskey KEY names another. His keyboard sends Page Up
+-- for Caps over games (xremap), which is what his Caps button holds.
+-- In a fight too: as with Hypershift, a secure button's snippet sets and clears the keys (override bindings, never saved
+-- ones) and shows and hides the bars. Who the twins cast on is one state check of the game's ([@focus,exists]): when a
+-- focus comes or goes, a second snippet writes "focus" or nothing into each twin's unit, which is where the game's own
+-- button code looks first. WackyBars fills both in out of a fight, after each apply.
+-- Cost: nothing until the key is pressed, then one snippet on press and one on release; the focus check is the game's state
+-- driver, one condition while the box is ticked. Box unticked: no key taken, no check, the bars don't exist.
+local capsHold = CreateFrame("Button", "WackyBarsCapsHold", nil, "SecureHandlerClickTemplate")
+capsHold:RegisterForClicks("AnyDown", "AnyUp")
+capsHold:EnableMouse(false)
+capsHold:SetAttribute("_onclick", [=[
+	if down then
+		if self:GetAttribute("held") then return end -- (the key repeating while held)
+		self:SetAttribute("held", true)
+		for i = 1, self:GetAttribute("count") or 0 do
+			self:SetBindingClick(true, self:GetAttribute("key" .. i), self:GetAttribute("click" .. i), "Keybind")
+		end
+	else
+		self:SetAttribute("held", nil)
+		self:ClearBindings()
+	end
+	-- (Caps + Shift or Ctrl: the Shift and Ctrl copy buttons cast on your focus only while the key is down)
+	local uf = self:GetFrameRef("unitframe")
+	local unit = (down and uf and uf:GetAttribute("state-wbfocus") == "focus") and "focus" or nil
+	for i = 1, self:GetAttribute("copies") or 0 do
+		local b = self:GetFrameRef("c" .. i)
+		if b then b:SetAttribute("unit", unit) end
+	end
+	for i = 1, 2 do
+		local bar = self:GetFrameRef("bar" .. i)
+		if bar then
+			if down then bar:Show() else bar:Hide() end
+		end
+	end
+]=])
+local capsUnit = CreateFrame("Frame", "WackyBarsCapsUnit", nil, "SecureHandlerStateTemplate")
+capsUnit:SetAttribute("_onstate-wbfocus", [=[
+	local unit = newstate == "focus" and "focus" or nil
+	for i = 1, self:GetAttribute("count") or 0 do
+		local b = self:GetFrameRef("b" .. i)
+		if b then b:SetAttribute("unit", unit) end
+	end
+	-- (a focus that comes or goes while the key is down: the Shift and Ctrl copy buttons follow too)
+	local hold = self:GetFrameRef("hold")
+	if hold and hold:GetAttribute("held") then
+		for i = 1, self:GetAttribute("copies") or 0 do
+			local b = self:GetFrameRef("c" .. i)
+			if b then b:SetAttribute("unit", unit) end
+		end
+	end
+]=])
+-- Caps + Shift and Caps + Ctrl (his ask, Nov 26: "how does it handle caps+shift for mana drain?", then "yea i think we add
+-- that"): the Shift and Ctrl copy bars, keyboard and mouse, need no twins. Their own buttons already show what Shift + key
+-- and Ctrl + key fire, and no key presses them (the keys go through the game's bars). While the Caps key is down those keys
+-- press them, and for just that long they cast on your focus. Needs the Shift or Ctrl bar switched on in /wbars. Alt + key is
+-- never touched (his Alt layer is jobs and the pet bar).
+local COPY_LAYER = { Shift = true, MouseShift = true, Ctrl = true, MouseCtrl = true }
+local CAPS_FOCUS = "[@focus,exists] focus; none"
+local capsKeyOwner = CreateFrame("Frame") -- (the held key's own binding, kept apart from the keys the snippet sets and clears)
+local capsDriven = false
+
+local function capsBars()
+	local list = {}
+	for _, bar in ipairs(wb.bars) do if bar.set.held then list[#list + 1] = bar end end
+	return list
+end
+-- The key you hold: one you named, else the one on your Caps button, else the Caps key itself.
+local function capsKey()
+	local DB = wb.db()
+	local k = DB and (DB.capsKey or (DB.keys and DB.keys.PlainCaps))
+	return type(k) == "string" and k ~= "" and k or "CAPSLOCK"
+end
+local function fillCaps()
+	if InCombatLockdown() then return end
+	local DB = wb.db()
+	local on = DB and DB.capsHold and true or false
+	local showAll = wb.editing() or wb.moving()
+	ClearOverrideBindings(capsKeyOwner)
+	ClearOverrideBindings(capsHold)
+	capsHold:SetAttribute("held", nil)
+	local n, u = 0, 0
+	local unit = (on and UnitExists and UnitExists("focus")) and "focus" or nil
+	for i, bar in ipairs(capsBars()) do
+		for _, b in ipairs(bar.buttons) do
+			local q = b.wb
+			-- (who a twin casts on: your focus while the box is ticked and you have one; nothing written otherwise)
+			if b:GetAttribute("unit") ~= unit then b:SetAttribute("unit", unit) end
+			u = u + 1
+			capsUnit:SetFrameRef("b" .. u, b)
+			if on and q.slot and q.twinKey and not DB.hidden[q.id] then
+				n = n + 1
+				capsHold:SetAttribute("key" .. n, q.twinKey)
+				capsHold:SetAttribute("click" .. n, b:GetName())
+			end
+		end
+		-- (handed to the snippet only while the bars come and go with the key: in Edit keys and Move bars they stay up)
+		if on and not showAll then capsHold:SetFrameRef("bar" .. i, bar.frame) else capsHold:SetAttribute("frameref-bar" .. i, nil) end
+		bar.wbHeld = on
+		if on then bar.frame:SetShown(showAll) end
+	end
+	local c = 0
+	for _, bar in ipairs(wb.bars) do
+		if COPY_LAYER[bar.id] then
+			for _, b in ipairs(bar.buttons) do
+				local q = b.wb
+				-- (out of a fight a copy button never keeps a focus from here)
+				if b:GetAttribute("unit") ~= nil then b:SetAttribute("unit", nil) end
+				local key = on and q.slot and (q.kind == "mirror" or q.kind == "free") and wb.effKey(b) or nil
+				if key then
+					n = n + 1
+					capsHold:SetAttribute("key" .. n, key)
+					capsHold:SetAttribute("click" .. n, b:GetName())
+					c = c + 1
+					capsHold:SetFrameRef("c" .. c, b)
+					capsUnit:SetFrameRef("c" .. c, b)
+				end
+			end
+		end
+	end
+	capsHold:SetFrameRef("unitframe", capsUnit)
+	capsUnit:SetFrameRef("hold", capsHold)
+	capsHold:SetAttribute("copies", c)
+	capsUnit:SetAttribute("copies", c)
+	capsHold:SetAttribute("count", n)
+	capsUnit:SetAttribute("count", on and u or 0)
+	if on then
+		-- (priority: it wins over the Caps button's own key, which is the same key)
+		SetOverrideBindingClick(capsKeyOwner, true, capsKey(), "WackyBarsCapsHold")
+		if not capsDriven then
+			RegisterStateDriver(capsUnit, "wbfocus", CAPS_FOCUS)
+			capsDriven = true
+		end
+	elseif capsDriven then
+		UnregisterStateDriver(capsUnit, "wbfocus")
+		capsDriven = false
+	end
+end
+wb.applyHooks[#wb.applyHooks + 1] = fillCaps
+wb.modeHooks[#wb.modeHooks + 1] = fillCaps
+wb.optionRows[#wb.optionRows + 1] = {
+	label = "Caps bars: hold Caps and your keys cast on your focus",
+	tab = "held", group = "Focus", hint = "Another key to hold: /wbars capskey KEY",
+	get = function() local DB = wb.db() return DB and DB.capsHold and true or false end,
+	set = function(v) wb.db().capsHold = v and true or nil end,
+}
+-- /wbars capskey KEY: another key to hold (as the game names it: CAPSLOCK, PAGEUP, BUTTON4 ...); /wbars capskey: back to the
+-- one on your Caps button.
+wb.slash.capskey = function(rest)
+	if InCombatLockdown() then wb.say("after the fight.") return end
+	local DB = wb.db()
+	local k = (rest or ""):upper():gsub("%s+", "")
+	DB.capsKey = k ~= "" and k or nil
+	wb.port()
+	wb.apply()
+	wb.say("the Caps bars' key is " .. capsKey() .. (DB.capsHold and "." or " (the Caps bars box in /wbars is not ticked)."))
+end
+
+-- Focus keys (his ask, Nov 26: "so annoying have to set it to a bar. can we add the tilt buttons to wbar and just make them
+-- invis"): the game has a Focus Target key but none to clear the focus, and a macro only gets a key through a bar button.
+-- With the box ticked two keys do it with no button on any bar: one sets your focus (what your mouse is over, else your
+-- target), one clears it. They press two hidden buttons that run the game's own /focus and /clearfocus. The keys: [ and ]
+-- (what his mouse wheel's tilts send); /wbars focuskeys SET CLEAR names others. Override bindings, never saved ones, and
+-- only on a key that is free in Key Bindings or already your Focus Target key. Off by default. Cost: none until pressed.
+local FOCUS_DO = { set = "/focus [@mouseover,exists,nodead][]", clear = "/clearfocus" }
+local focusOwner = CreateFrame("Frame")
+local focusBtn = {}
+for _, what in ipairs({ "set", "clear" }) do
+	local b = CreateFrame("Button", what == "set" and "WackyBarsFocusSet" or "WackyBarsFocusClear", nil, "SecureActionButtonTemplate")
+	b:RegisterForClicks("AnyDown", "AnyUp")
+	b:EnableMouse(false)
+	b:SetAttribute("type", "macro")
+	b:SetAttribute("macrotext", FOCUS_DO[what])
+	focusBtn[what] = b
+end
+local function focusKeys()
+	local DB = wb.db()
+	local k = DB and type(DB.focusKeys) == "table" and DB.focusKeys or nil
+	return k and k[1] or "[", k and k[2] or "]"
+end
+local function fillFocus()
+	if InCombatLockdown() then return end
+	local DB = wb.db()
+	ClearOverrideBindings(focusOwner)
+	if not (DB and DB.focusKeys) then return end
+	local set, clear = focusKeys()
+	for what, key in pairs({ set = set, clear = clear }) do
+		local cmd = GetBindingAction(key) or ""
+		if cmd == "" or cmd == "NONE" or (what == "set" and cmd == "FOCUSTARGET") then
+			SetOverrideBindingClick(focusOwner, false, key, focusBtn[what]:GetName())
+		end
+	end
+end
+wb.applyHooks[#wb.applyHooks + 1] = fillFocus
+wb.optionRows[#wb.optionRows + 1] = {
+	label = "Focus keys: [ sets your focus, ] clears it (no bar button needed)",
+	tab = "held", group = "Focus", hint = "Other keys: /wbars focuskeys SET CLEAR",
+	get = function() local DB = wb.db() return DB and DB.focusKeys and true or false end,
+	set = function(v) local DB = wb.db() DB.focusKeys = v and (type(DB.focusKeys) == "table" and DB.focusKeys or true) or nil end,
+}
+-- /wbars focuskeys SET CLEAR: two other keys, as the game names them (/wbars focuskeys: back to [ and ])
+wb.slash.focuskeys = function(rest)
+	if InCombatLockdown() then wb.say("after the fight.") return end
+	local DB = wb.db()
+	local a, b = (rest or ""):upper():match("^(%S+)%s+(%S+)$")
+	DB.focusKeys = a and { a, b } or true
+	wb.apply()
+	local set, clear = focusKeys()
+	wb.say("focus keys: " .. set .. " sets your focus, " .. clear .. " clears it. A key that already does something else in Key Bindings is left alone.")
+end

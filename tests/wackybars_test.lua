@@ -10,6 +10,11 @@ local M = require("wowmock")
 M.install()
 local failures = 0
 local function check(name, cond) out(("%-76s %s"):format(name, cond and "ok" or "FAILED")); if not cond then failures = failures + 1 end end
+-- In the options window: on the window itself or on one of its four tab pages (a frame each, the window's child).
+function M.inOptions(f)
+	local w, p = _G.WackyBarsOptions, f.__parent
+	return w ~= nil and p ~= nil and (p == w or (p.__kind == "Frame" and p.__parent == w and p.__template == nil))
+end
 
 -- Saved bindings (what GetBindingAction reads), what has something in it, the override keys WackyBars sets.
 local binds = {
@@ -561,7 +566,7 @@ DB.off.Shift = nil
 -- Alt boxes went to QuietHUD's Show with Alt column, Nov 10).
 local boxes = {}
 for _, f in ipairs(M.frames) do
-	if f.__parent == _G.WackyBarsOptions and f.__template == "UICheckButtonTemplate" then boxes[#boxes + 1] = f end
+	if M.inOptions(f) and f.__template == "UICheckButtonTemplate" then boxes[#boxes + 1] = f end
 end
 local shiftBox = boxes[4] -- (Plain keyboard, Plain mouse, Plain Caps, Shift keyboard, ...)
 shiftBox.__scripts.OnClick(shiftBox)
@@ -1060,7 +1065,7 @@ do -- the Arrows button in /wbars: one click, 30% to 50%
 	local btn
 	SlashCmdList.WACKYBARS("")
 	for _, f in ipairs(M.frames) do
-		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "30%" then btn = f end
+		if M.inOptions(f) and f.__template == "UIPanelButtonTemplate" and f.__text == "30%" then btn = f end
 	end
 	if btn and btn.__scripts.OnClick then btn.__scripts.OnClick(btn) end
 	check("the Arrows button in /wbars steps 30% to 50% and says so", btn and DB.arrowAlpha == 0.5 and btn.__text == "50%"
@@ -1164,7 +1169,7 @@ do -- 8: more looks. The Look button opens a short list (the game's menu); each 
 	if not _G.WackyBarsOptions:IsShown() then SlashCmdList.WACKYBARS("") end
 	local lookBtn
 	for _, f in ipairs(M.frames) do
-		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+		if M.inOptions(f) and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
 	end
 	check("the Look button in /wbars shows Default", lookBtn ~= nil)
 	if lookBtn then lookBtn.__scripts.OnClick(lookBtn) end
@@ -1218,7 +1223,7 @@ do -- 3: glass. A box in the Look list for every colour look: one dark see-throu
 	end
 	local lookBtn
 	for _, f in ipairs(M.frames) do
-		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+		if M.inOptions(f) and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
 	end
 	local entries = {}
 	local root = {
@@ -1277,7 +1282,7 @@ end
 do -- 4: drifting colours. Off by default; a box in the Look list; a timer only while a bar shows above QuietHUD's Faded.
 	local lookBtn
 	for _, f in ipairs(M.frames) do
-		if f.__parent == _G.WackyBarsOptions and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
+		if M.inOptions(f) and f.__template == "UIPanelButtonTemplate" and f.__text == "Default" then lookBtn = f end
 	end
 	local entries = {}
 	local root = {
@@ -1492,15 +1497,10 @@ do
 	rawset(_G, "StaticPopup_Show", function(which) popups[#popups + 1] = which end)
 	local function dialogSays(text) return { GetEditBox = function() return { GetText = function() return text end } end } end
 	local opts = _G.WackyBarsOptions
-	rawset(opts, "GetRegions", function(s) -- (the window's labels; the fake game lists none)
-		local out = {}
-		for _, o in ipairs(M.frames) do if o.__parent == s and o.__kind == "CreateFontString" then out[#out + 1] = o end end
-		return unpack(out)
-	end)
 	if opts.__shown then SlashCmdList.WACKYBARS("") end
 	SlashCmdList.WACKYBARS("") -- (the window opens: the row is made)
 	local pick, save, label = _G.WackyBarsProfilePick, _G.WackyBarsProfileSave, nil
-	for _, o in ipairs(M.frames) do if o.__parent == opts and o.__text == "Profiles" then label = o end end
+	for _, o in ipairs(M.frames) do if M.inOptions(o) and o.__text == "Profiles" then label = o end end
 	local box = label and label.__points[1] and label.__points[1][2]
 	check("Profiles: one row in /wbars, the label, a name button (None yet) and Save where the other rows have buttons",
 		pick and save and pick.__text == "None" and save.__text == "Save" and pick.__w == 160 and box
@@ -1722,7 +1722,7 @@ do
 	if not opts.__shown then SlashCmdList.WACKYBARS("") end
 	local box
 	for _, o in ipairs(M.frames) do
-		if o.__parent == opts and o.__text == "Panic flash (escape spells pulse under 30% health)" then box = o.__points[1][2] end
+		if M.inOptions(o) and o.__text == "Panic flash (escape spells pulse under 30% health)" then box = o.__points[1][2] end
 	end
 	box.__scripts.OnClick(box)
 	combat = true
@@ -2138,6 +2138,168 @@ do -- Hypershift while held (Hold.lua; his ask, Nov 12): End (xremap's stand-in 
 		and (rule(MC) ~= nil) == not DB.off.MouseCtrl)
 end
 
+do -- The Caps bars (Hold.lua; his ask, Nov 26): hold Caps and each plain key presses its twin, which casts on your focus
+	local hold, unitFrame = _G.WackyBarsCapsHold, _G.WackyBarsCapsUnit
+	local urefs = {}
+	rawset(hold, "SetFrameRef", function(s, k, f) s.__attrs["frameref-" .. k] = f end)
+	rawset(unitFrame, "SetFrameRef", function(_, k, f) urefs[k] = f end)
+	local K, MK = _G.WackyBarsCaps, _G.WackyBarsMouseCaps
+	local function focusRule() return drivers[unitFrame] and drivers[unitFrame].wbfocus end
+	SlashCmdList.WACKYBARS("status")
+	check("the Caps bars: nothing until their box is ticked (hidden, no key taken, no focus check, no spare slot)",
+		not K.__shown and not MK.__shown and not _G.WackyBarsCapsQ.__shown and overrides.PAGEUP == nil and overrides.CAPSLOCK == nil
+		and focusRule() == nil and DB.spare.CapsQ == nil and attr("WackyBarsCapsQ", "unit") == nil)
+	local capsWas, capsShown = DB.keys.PlainCaps, _G.WackyBarsPlainCaps.__shown
+	local copyOff = { DB.off.Shift, DB.off.Ctrl, DB.off.Alt }
+	DB.off.Shift, DB.off.Ctrl, DB.off.Alt = nil, nil, nil
+	DB.keys.PlainCaps = "PAGEUP" -- (his Caps button's key: xremap sends Page Up for Caps over games)
+	DB.capsHold = true
+	local eWas = binds.E
+	binds.E = "MOVEFORWARD"
+	M.fire("UPDATE_BINDINGS")
+	SlashCmdList.WACKYBARS("status")
+	local snippet = assert(loadstring("local self, button, down = ...\n" .. hold.__attrs._onclick))
+	setfenv(snippet, { tostring = tostring })
+	local handle = {
+		GetAttribute = function(_, k) return hold.__attrs[k] end,
+		SetAttribute = function(_, k, v) hold.__attrs[k] = v end,
+		GetFrameRef = function(_, k) return hold.__attrs["frameref-" .. k] end,
+		SetBindingClick = function(_, p, key, name, how) SetOverrideBindingClick(hold, p, key, name, how) end,
+		ClearBindings = function() ClearOverrideBindings(hold) end,
+	}
+	local function press(down) snippet(handle, "LeftButton", down) end
+	check("box ticked: the key on your Caps button presses the hold button, over that button's own key",
+		overrides.PAGEUP and overrides.PAGEUP.click == "WackyBarsCapsHold" and overrides.PAGEUP.priority)
+	check("... the Caps button itself is gone from the plain keyboard bar", not _G.WackyBarsPlainCaps.__shown)
+	check("... both bars are protected and hidden until the key is down", K.__template == "SecureFrameTemplate"
+		and MK.__template == "SecureFrameTemplate" and not K.__shown and not MK.__shown)
+	check("... a twin shows what its plain key fires: Q Action Bar 1 button 1 with its pages, 1 slot 67",
+		attr("WackyBarsCapsQ", "action") == 1 and attr("WackyBarsCapsQ", "labaction-2") == 13
+		and attr("WackyBarsCaps1", "action") == 67 and attr("WackyBarsCapsQ", "action") == attr("WackyBarsPlainQ", "action"))
+	check("... side 1's twin shows side 1's slot, labelled like the key", attr("WackyBarsMouseCapsSide1", "action")
+		== attr("WackyBarsMousePlainSide1", "action") and attr("WackyBarsMouseCapsSide1", "action") ~= nil
+		and _G.WackyBarsCapsQ.HotKey.__text == "Q" and _G.WackyBarsMouseCapsSide1.HotKey.__text == "1")
+	check("... the twins take no spare slots and no keys of their own", DB.spare.CapsQ == nil and DB.spare.MouseCapsSide1 == nil
+		and overrides.Q == nil)
+	-- (the holder with the same number as the plain bar's: QuietHUD fades it with that game bar's row)
+	local function row(b) return (b.__parent.__name or ""):match("(%d+)$") end
+	check("... they fade with their plain bar's row in QuietHUD", row(_G.WackyBarsCapsQ) == row(_G.WackyBarsPlainQ)
+		and _G.WackyBarsCapsQ.__parent.__name == "WackyBarsHoldCaps" .. row(_G.WackyBarsPlainQ)
+		and row(_G.WackyBarsMouseCapsSide1) == row(_G.WackyBarsMousePlainSide1))
+	check("... a key that moves you keeps moving you: its arrow, no button", _G.WackyBarsPlainE.wb.move ~= nil
+		and _G.WackyBarsCapsE.wb.move == _G.WackyBarsPlainE.wb.move and not _G.WackyBarsCapsE.__shown
+		and _G.WackyBarsCapsE.wb.arrowTex.__shown)
+	local told = {}
+	rawset(_G, "QuietHUD_HeldBar", function(holders, on) told[#told + 1] = on end)
+	press(true)
+	check("Caps down: both bars show, QuietHUD told", K.__shown and MK.__shown and #told == 2 and told[1] == true)
+	check("... Q presses its twin the library's way, over anything else on Q", overrides.Q and overrides.Q.click == "WackyBarsCapsQ"
+		and overrides.Q.how == "Keybind" and overrides.Q.priority)
+	check("... side 1 (F1) and the wheel click press theirs", overrides.F1 and overrides.F1.click == "WackyBarsMouseCapsSide1"
+		and overrides.BUTTON3 and overrides.BUTTON3.click == "WackyBarsMouseCapsWheel")
+	check("... the movement keys and Alt + Q are left as they are", overrides.E == nil and overrides["ALT-Q"] == nil)
+	check("... Shift + Q and Ctrl + Q press the Shift and Ctrl bars' own buttons, on your target while there is no focus",
+		overrides["SHIFT-Q"] and overrides["SHIFT-Q"].click == "WackyBarsShiftQ" and overrides["SHIFT-Q"].how == "Keybind"
+		and overrides["SHIFT-Q"].priority and overrides["CTRL-Q"] and overrides["CTRL-Q"].click == "WackyBarsCtrlQ"
+		and attr("WackyBarsShiftQ", "unit") == nil)
+	press(true)
+	check("... the key repeating changes nothing", overrides.Q and K.__shown)
+	press(false)
+	check("... let go: Shift + Q is its own key again", overrides["SHIFT-Q"] == nil)
+	unitFrame.__attrs["state-wbfocus"] = "focus"
+	press(true)
+	check("with a focus: Caps down makes the Shift and Ctrl buttons cast on it", attr("WackyBarsShiftQ", "unit") == "focus"
+		and attr("WackyBarsCtrlQ", "unit") == "focus" and attr("WackyBarsAltQ", "unit") == nil)
+	press(false)
+	check("... Caps up: they cast like any button again", attr("WackyBarsShiftQ", "unit") == nil and attr("WackyBarsCtrlQ", "unit") == nil)
+	unitFrame.__attrs["state-wbfocus"] = nil
+	check("Caps up: every key is the plain one again, the bars go, the hold key stays", overrides.Q == nil and overrides.F1 == nil
+		and not K.__shown and not MK.__shown and overrides.PAGEUP and overrides.PAGEUP.click == "WackyBarsCapsHold"
+		and told[#told] == false)
+	rawset(_G, "QuietHUD_HeldBar", nil)
+	-- who the twins cast on: the game's own state check, one for all of them
+	check("no focus: the twins cast like any button (no unit written), one focus check runs",
+		attr("WackyBarsCapsQ", "unit") == nil and focusRule() == "[@focus,exists] focus; none")
+	local onFocus = assert(loadstring("local self, stateid, newstate = ...\n" .. unitFrame.__attrs["_onstate-wbfocus"]))
+	local uh = { GetAttribute = function(_, k) return unitFrame.__attrs[k] end, GetFrameRef = function(_, k) return urefs[k] end }
+	onFocus(uh, "wbfocus", "focus")
+	check("... the Shift and Ctrl buttons don't follow while the key is up", attr("WackyBarsShiftQ", "unit") == nil)
+	press(true)
+	onFocus(uh, "wbfocus", "none")
+	onFocus(uh, "wbfocus", "focus")
+	check("... a focus that comes while the key is down: they follow", attr("WackyBarsShiftQ", "unit") == "focus")
+	press(false)
+	check("a focus appears: every twin casts on it, keyboard and mouse; the plain buttons don't",
+		attr("WackyBarsCapsQ", "unit") == "focus" and attr("WackyBarsMouseCapsSide1", "unit") == "focus"
+		and attr("WackyBarsMouseCapsWheel", "unit") == "focus" and attr("WackyBarsPlainQ", "unit") == nil)
+	onFocus(uh, "wbfocus", "none")
+	check("... it goes: back to your target", attr("WackyBarsCapsQ", "unit") == nil and attr("WackyBarsMouseCapsSide1", "unit") == nil)
+	rawset(_G, "UnitExists", function(u) return u == "focus" end)
+	SlashCmdList.WACKYBARS("status")
+	check("a focus already there when the bars are set up: on it at once", attr("WackyBarsCapsQ", "unit") == "focus")
+	rawset(_G, "UnitExists", nil)
+	SlashCmdList.WACKYBARS("status")
+	DB.hidden.CapsQ = true
+	SlashCmdList.WACKYBARS("status")
+	press(true)
+	check("a twin you hid: its key keeps its plain job while held", overrides.Q == nil and overrides.F1 ~= nil)
+	press(false)
+	DB.hidden.CapsQ = nil
+	SlashCmdList.WACKYBARS("status")
+	WackyBars_ToggleMove()
+	check("Move bars: the Caps bars show to be moved", K.__shown and MK.__shown)
+	press(true)
+	press(false)
+	check("... and the key does not hide them there", K.__shown and MK.__shown)
+	WackyBars_ToggleMove()
+	check("... done: hidden again", not K.__shown and not MK.__shown)
+	SlashCmdList.WACKYBARS("capskey button4")
+	check("/wbars capskey BUTTON4: that key is held instead, Caps is a button again", overrides.BUTTON4
+		and overrides.BUTTON4.click == "WackyBarsCapsHold" and not (overrides.PAGEUP and overrides.PAGEUP.click == "WackyBarsCapsHold")
+		and _G.WackyBarsPlainCaps.__shown)
+	SlashCmdList.WACKYBARS("capskey")
+	check("/wbars capskey: back to the key on the Caps button", DB.capsKey == nil and overrides.BUTTON4 == nil
+		and overrides.PAGEUP and overrides.PAGEUP.click == "WackyBarsCapsHold")
+	DB.keys.PlainCaps = nil
+	SlashCmdList.WACKYBARS("status")
+	check("no key on the Caps button: the Caps key itself", overrides.CAPSLOCK and overrides.CAPSLOCK.click == "WackyBarsCapsHold")
+	DB.capsHold = nil
+	DB.keys.PlainCaps = capsWas
+	DB.off.Shift, DB.off.Ctrl, DB.off.Alt = unpack(copyOff, 1, 3)
+	binds.E = eWas
+	M.fire("UPDATE_BINDINGS")
+	SlashCmdList.WACKYBARS("status")
+	check("box unticked: no key taken, no focus check, the bars and twins gone, nothing written on them, Caps a button again",
+		overrides.CAPSLOCK == nil and not (overrides.PAGEUP and overrides.PAGEUP.click == "WackyBarsCapsHold") and focusRule() == nil
+		and not K.__shown and not _G.WackyBarsCapsQ.__shown and attr("WackyBarsCapsQ", "unit") == nil
+		and hold.__attrs.count == 0 and _G.WackyBarsPlainCaps.__shown == capsShown)
+end
+
+do -- Focus keys (Hold.lua; his ask, Nov 26): two keys set and clear the focus through hidden buttons, no bar button
+	local S, C = _G.WackyBarsFocusSet, _G.WackyBarsFocusClear
+	check("focus keys: two hidden buttons that run the game's /focus and /clearfocus", S and C and S.__attrs.type == "macro"
+		and S.__attrs.macrotext == "/focus [@mouseover,exists,nodead][]" and C.__attrs.macrotext == "/clearfocus")
+	SlashCmdList.WACKYBARS("status")
+	check("... box unticked: no key taken", overrides["["] == nil and overrides["]"] == nil)
+	DB.focusKeys = true
+	SlashCmdList.WACKYBARS("status")
+	check("... ticked: [ sets, ] clears, both only override bindings", overrides["["] and overrides["["].click == "WackyBarsFocusSet"
+		and overrides["]"] and overrides["]"].click == "WackyBarsFocusClear")
+	binds["["], binds["]"] = "FOCUSTARGET", "TOGGLESOUND"
+	SlashCmdList.WACKYBARS("status")
+	check("... a key that is your Focus Target key is taken (same job, your mouse first); one doing something else is left",
+		overrides["["] and overrides["["].click == "WackyBarsFocusSet" and overrides["]"] == nil)
+	binds["["], binds["]"] = nil, nil
+	SlashCmdList.WACKYBARS("focuskeys button4 button5")
+	check("/wbars focuskeys BUTTON4 BUTTON5: those two instead", overrides.BUTTON4 and overrides.BUTTON4.click == "WackyBarsFocusSet"
+		and overrides.BUTTON5 and overrides.BUTTON5.click == "WackyBarsFocusClear" and overrides["["] == nil)
+	SlashCmdList.WACKYBARS("focuskeys")
+	check("/wbars focuskeys: back to [ and ]", overrides["["] and overrides["]"] and overrides.BUTTON4 == nil)
+	DB.focusKeys = nil
+	SlashCmdList.WACKYBARS("status")
+	check("... unticked again: both keys free", overrides["["] == nil and overrides["]"] == nil)
+end
+
 -- Job pictures (Jobs.lua, his "like H is my interact", Nov 24): a key bound to Interact shows the interact picture and its key,
 -- the job's name on hover; a spell dragged onto that button shows instead; the key itself is never bound by WackyBars.
 do
@@ -2207,6 +2369,118 @@ do
 	check("the Alt bar has B, N and a 4-wide Space (Alt + B, Alt + N, Alt + Space)", _G.WackyBarsAltB.wb.def == "ALT-B"
 		and _G.WackyBarsAltN.wb.def == "ALT-N" and _G.WackyBarsAltSpace.wb.def == "ALT-SPACE"
 		and _G.WackyBarsAltSpace.wb.spot.wide == 4 and _G.WackyBarsShiftB == nil and _G.WackyBarsPlainSpace == nil)
+end
+
+-- The /wbars window's four tabs (his "we might have to make wbars menu better now", Nov 26): Bars, Held keys and focus,
+-- Looks, Extras; each box on the page of its tab, one page showing at a time, a /wbars word per tab, the Caps column renamed.
+do
+	local opts = _G.WackyBarsOptions
+	if opts.__shown then SlashCmdList.WACKYBARS("") end
+	local pageOf, headPage, pageList = {}, {}, {}
+	for _, o in ipairs(M.frames) do
+		local p = o.__parent
+		if p and p ~= opts and M.inOptions(o) then
+			if not pageOf[p] then pageOf[p] = true; pageList[#pageList + 1] = p end
+			if o.__kind == "CreateFontString" and o.__text and o.__text ~= "" then headPage[o.__text] = p end
+		end
+	end
+	check("the options have four pages", #pageList == 4)
+	local tabs = {}
+	for _, o in ipairs(M.frames) do
+		if o.__parent == opts and o.__template == "PanelTopTabButtonTemplate" then tabs[#tabs + 1] = o end
+	end
+	check("... and four tabs along the top, as QuietHUD's window: Bars, Held keys and focus, Looks, Extras", #tabs == 4
+		and tabs[1].__text == "Bars" and tabs[2].__text == "Held keys and focus" and tabs[3].__text == "Looks"
+		and tabs[4].__text == "Extras" and opts.numTabs == 4 and tabs[1].__points[1][2] == 51)
+	local bars, held, looks, extras = headPage["Keyboard"], headPage["Focus"], headPage["Look"], headPage["Pet bar"]
+	local function shownOnly(p)
+		for _, q in ipairs(pageList) do if q.__shown ~= (q == p) then return false end end
+		return p ~= nil
+	end
+	SlashCmdList.WACKYBARS("")
+	check("/wbars opens on Bars the first time", opts.__shown and shownOnly(bars) and opts.selectedTab == 1)
+	check("Bars: the bar boxes' columns, the Caps column now Caps Lock button (not mixed up with the Caps bars), Hypershift,"
+		.. " edges, wheel click, snap", headPage["Mouse"] == bars and headPage["Caps Lock button"] == bars
+		and headPage["Caps"] == nil and headPage["Hypershift"] == bars and headPage["Edge buttons (E1, E2)"] == bars
+		and headPage["Wheel click button"] == bars and headPage["Snap when moving bars (like Edit Mode)"] == bars
+		and headPage["Caps bars: on the Held keys and focus tab."] == bars)
+	check("Held keys and focus: the three held-bar boxes under one heading, the Caps bars and the focus keys under Focus",
+		held ~= nil and held ~= bars and headPage["Bars that show only while you hold a key"] == held
+		and headPage["Hypershift bar only while you hold Hypershift (Naga blue profile)"] == held
+		and headPage["Shift and Ctrl bars only while you hold Shift or Ctrl"] == held
+		and headPage["Alt keyboard bar only while you hold Alt"] == held
+		and headPage["Caps bars: hold Caps and your keys cast on your focus"] == held
+		and headPage["Focus keys: [ sets your focus, ] clears it (no bar button needed)"] == held)
+	check("... the settings only a /wbars word reaches say their word under their box",
+		headPage["Another key to hold: /wbars capskey KEY"] == held and headPage["Other keys: /wbars focuskeys SET CLEAR"] == held)
+	check("Looks: the look, bar art, staggered rows, labels, and the movement keys together (which keys, arrows, icons)",
+		looks ~= nil and headPage["Bar art (the faint wing in empty buttons)"] == looks
+		and headPage["Staggered keyboard rows"] == looks and headPage["Show the modifier in labels (sQ, cQ, aQ, h1)"] == looks
+		and headPage["Movement keys"] == looks and headPage["Which keys"] == looks and headPage["Arrows"] == looks
+		and headPage["Movement keys as icons (else faint arrows)"] == looks
+		and headPage["How bars fade and show: QuietHUD (if installed), Action bars page."] == looks)
+	local function y(text)
+		for _, o in ipairs(M.frames) do
+			if M.inOptions(o) and o.__text == text then
+				local pt = o.__points[1]
+				return pt[1] == "LEFT" and pt[2].__points[1][3] or pt[3] -- (a box's label: the box's place)
+			end
+		end
+	end
+	check("Extras: the flashes, then Profiles under them, then the pet bar's button", extras ~= nil
+		and headPage["Panic flash (escape spells pulse under 30% health)"] == extras
+		and headPage["Ready shine (a big cooldown's button shines once when it comes back)"] == extras
+		and headPage["Interrupt nudge (your target casts: the spells that stop it pulse)"] == extras
+		and headPage["Profiles"] == extras and _G.WackyBarsProfilePick.__parent == extras
+		and y("Profiles") < y("Interrupt nudge (your target casts: the spells that stop it pulse)")
+		and y("Pet bar") < y("Profiles"))
+	check("one heading per group (Focus once, Movement keys once)", (function()
+		local n = { Focus = 0, ["Movement keys"] = 0 }
+		for _, o in ipairs(M.frames) do if M.inOptions(o) and n[o.__text] then n[o.__text] = n[o.__text] + 1 end end
+		return n.Focus == 1 and n["Movement keys"] == 1
+	end)())
+	check("no two things on a page at the same place", (function()
+		local seen = {}
+		for _, o in ipairs(M.frames) do
+			local pt = o.__points[1]
+			if pageOf[o.__parent] and pt and pt[1] == "TOPLEFT" and type(pt[2]) == "number" then
+				local k = tostring(o.__parent) .. ":" .. pt[2] .. ":" .. pt[3]
+				if seen[k] then return false end
+				seen[k] = true
+			end
+		end
+		return true
+	end)())
+	check("the window fits the game's screen (768 high at the default UI scale): under 420 high", opts.__h < 420 and opts.__h > 300)
+	tabs[3].__scripts.OnClick(tabs[3])
+	check("a click on the Looks tab shows that page only", shownOnly(looks) and opts.selectedTab == 3)
+	SlashCmdList.WACKYBARS("")
+	SlashCmdList.WACKYBARS("")
+	check("closed and opened again: still on Looks", opts.__shown and shownOnly(looks))
+	SlashCmdList.WACKYBARS("held")
+	check("/wbars held goes to Held keys and focus while the window is open", opts.__shown and shownOnly(held) and opts.selectedTab == 2)
+	SlashCmdList.WACKYBARS("")
+	SlashCmdList.WACKYBARS("extras")
+	check("/wbars extras opens the window on Extras", opts.__shown and shownOnly(extras))
+	SlashCmdList.WACKYBARS("bars")
+	check("/wbars bars: back on Bars", opts.__shown and shownOnly(bars))
+	check("... the Profiles row's own box stays hidden through the tab switches", _G.WackyBarsProfilePick.__points[1][2].__shown == false)
+	-- under every tab: the three buttons and the size note sit on the window itself
+	local foot = {}
+	for _, o in ipairs(M.frames) do
+		if o.__parent == opts and o.__template == "UIPanelButtonTemplate" then foot[o.__text or ""] = o.__points[1] and o.__points[1][1] end
+	end
+	check("Move bars, Edit keys and Reset places under every tab, in the window's button bar", foot["Move bars"] == "BOTTOMLEFT"
+		and foot["Edit keys"] == "BOTTOM" and foot["Reset places"] == "BOTTOMRIGHT")
+	-- the old words still work
+	local was = DB.stagger
+	SlashCmdList.WACKYBARS("stagger")
+	check("the old words still work (/wbars stagger)", (DB.stagger or false) ~= (was or false))
+	SlashCmdList.WACKYBARS("stagger")
+	SlashCmdList.WACKYBARS("nonsense")
+	check("an unknown word lists the words, the tab words too", (M.printed[#M.printed] or ""):find("bars, held, looks or extras", 1, true)
+		and (M.printed[#M.printed] or ""):find("capskey", 1, true))
+	SlashCmdList.WACKYBARS("")
 end
 
 objMt.__index = baseIndex -- (the fake game as it was)
